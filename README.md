@@ -35,7 +35,11 @@ Everkind is an accessibility-first, collaborative care workspace for older adult
 - **Server-side workflows:** Supabase Edge Functions (Deno).
 - **Scheduling:** pg_cron; asynchronous HTTP through pg_net; secret storage in Supabase Vault.
 - **Email:** Resend (requires a user-provided API key and a verified sender).
-- **Hosting:** Vercel.
+- **Hosting:** Vercel production deployment; Docker image is also prepared for Cloud Run.
+
+## Live demo
+
+https://catalyst-one-xi.vercel.app
 
 ## Run locally
 
@@ -55,6 +59,35 @@ npm run build
 npm audit
 ```
 
+## Docker / Google Cloud Run
+
+The repository includes a multi-stage Dockerfile and an Nginx configuration with SPA fallback and a `/healthz` endpoint. The container listens on Cloud Run's `PORT` (default 8080).
+
+Build locally (the Supabase URL and publishable key are public frontend configuration; never pass a service-role key):
+
+```bash
+set -a
+. ./.env.local
+set +a
+docker build \
+  --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+  --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+  -t everkind:latest .
+docker run --rm -p 8080:8080 everkind:latest
+```
+
+To deploy, push the image to an Artifact Registry repository in your GCP project, then run:
+
+```bash
+gcloud run deploy everkind \
+  --image asia-south1-docker.pkg.dev/PROJECT_ID/everkind/everkind:latest \
+  --region asia-south1 \
+  --allow-unauthenticated \
+  --port 8080
+```
+
+A Google Cloud project, billing configuration and authenticated `gcloud` CLI are required to publish a Cloud Run URL. The live public deployment linked above is currently on Vercel.
+
 ## Supabase setup
 
 The connected project is documented in [supabase/README.md](supabase/README.md). SQL migrations are in `supabase/migrations/`; Edge Functions are in `supabase/functions/`; database smoke checks are in `supabase/tests/`.
@@ -73,7 +106,3 @@ Never put a Supabase service-role/secret key, Resend API key or reminder cron se
 - Invitations are valid for 48 hours and are single-use. If an email is specified, the redeeming account must match it.
 - Email reminders are inactive until a Resend API key and verified sender are configured and the scheduled delivery job is enabled.
 - The current project is a hackathon prototype, not a certified clinical system. Do not use it for emergency care or enter sensitive real patient information without completing legal, privacy, operational and security reviews.
-
-## Current deployment
-
-The frontend is deployed on Vercel and connected to the Everkind Supabase project. Email delivery still requires the Resend credentials and sender verification described above.
