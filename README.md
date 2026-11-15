@@ -6,11 +6,11 @@ Everkind is an accessibility-first, collaborative care workspace for older adult
 
 ## What works
 
-- Email/password registration and sign-in through Supabase Auth.
+- Email/password registration and sign-in through Supabase Auth; signup requires 12+ characters with mixed case, a number and a symbol.
 - Care profile creation and invitation-code joining.
 - Shared cloud records for medications, dose schedules, adherence and appointments.
 - Role-aware access: owner, care recipient, caregiver and family.
-- One-use invitation codes, hashed at rest, optionally email-bound and expiring after 48 hours.
+- One-use 128-bit invitation codes, SHA-256 hashed at rest, optionally email-bound, expiring after 48 hours and rate-limited to 10 creations per account per hour.
 - Care-circle access revocation through an authenticated server function.
 - Row Level Security on all application tables.
 - Realtime subscriptions for shared care updates.

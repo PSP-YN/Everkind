@@ -7,6 +7,7 @@ declare
   ];
   t text;
   count_tables integer;
+  dose_update_check text;
 begin
   select count(*) into count_tables
   from information_schema.tables
@@ -16,29 +17,66 @@ begin
   end if;
 
   foreach t in array required_tables loop
-    if not coalesce((select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='public' and c.relname=t),false) then
+    if not coalesce((
+      select c.relrowsecurity
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='public' and c.relname=t
+    ),false) then
       raise exception 'RLS is not enabled on public.%', t;
     end if;
     if not exists(select 1 from pg_policies where schemaname='public' and tablename=t) then
       raise exception 'No RLS policy exists on public.%', t;
     end if;
+    if has_table_privilege('anon',format('public.%I',t),'SELECT') then
+      raise exception 'Anonymous role can read public.%', t;
+    end if;
   end loop;
 
+  if has_schema_privilege('anon','private','USAGE') then
+    raise exception 'Anonymous role must not use the private schema';
+  end if;
+  if has_function_privilege('anon','private.is_care_member(uuid)','EXECUTE')
+     or has_function_privilege('anon','private.can_manage_care(uuid)','EXECUTE') then
+    raise exception 'Anonymous role must not execute membership helper functions';
+  end if;
+  if not has_function_privilege('authenticated','private.is_care_member(uuid)','EXECUTE')
+     or not has_function_privilege('authenticated','private.can_manage_care(uuid)','EXECUTE') then
+    raise exception 'Authenticated role needs the private membership helpers used by RLS';
+  end if;
+
   if has_table_privilege('authenticated','public.care_members','INSERT')
-     or has_table_privilege('authenticated','public.care_members','UPDATE') then
+     or has_table_privilege('authenticated','public.care_members','UPDATE')
+     or has_table_privilege('authenticated','public.care_members','DELETE') then
     raise exception 'Authenticated users must not write care_members directly';
   end if;
-  if has_table_privilege('anon','public.medications','SELECT') then
-    raise exception 'Anonymous users must not read medication data';
+  if has_table_privilege('anon','public.care_invites','SELECT')
+     or has_table_privilege('authenticated','public.care_invites','SELECT')
+     or has_table_privilege('authenticated','public.care_invites','INSERT') then
+    raise exception 'Invitation records must only be accessed by trusted server functions';
   end if;
+  if has_table_privilege('authenticated','public.notification_deliveries','INSERT')
+     or has_table_privilege('authenticated','public.audit_events','INSERT') then
+    raise exception 'Clients must not forge notification or audit records';
+  end if;
+
   if has_column_privilege('authenticated','public.medication_doses','medication_id','UPDATE')
-     or has_column_privilege('authenticated','public.medication_doses','due_at','UPDATE') then
-    raise exception 'Clients must not alter dose identity or scheduled time';
+     or has_column_privilege('authenticated','public.medication_doses','due_at','UPDATE')
+     or has_column_privilege('authenticated','public.medication_doses','created_at','UPDATE') then
+    raise exception 'Clients must not alter dose identity, due time or creation time';
   end if;
   if not has_column_privilege('authenticated','public.medication_doses','status','UPDATE') then
     raise exception 'Authorized members must be able to record dose outcomes';
   end if;
+  select with_check into dose_update_check
+  from pg_policies
+  where schemaname='public' and tablename='medication_doses'
+    and cmd='UPDATE' and policyname='members record dose outcomes';
+  if dose_update_check is null
+     or position('recorded_by' in dose_update_check)=0
+     or position('auth.uid' in dose_update_check)=0 then
+    raise exception 'Dose outcome updates must bind recorded_by to the authenticated user';
+  end if;
+
   if has_function_privilege('anon','public.validate_reminder_secret(text)','EXECUTE')
      or has_function_privilege('authenticated','public.validate_reminder_secret(text)','EXECUTE') then
     raise exception 'Reminder secret validator must not be callable by client roles';
@@ -52,5 +90,5 @@ begin
   if public.validate_reminder_secret('invalid-test-value') then
     raise exception 'Reminder secret validator accepted an invalid secret';
   end if;
-  raise notice 'Everkind smoke tests passed';
+  raise notice 'Everkind security smoke tests passed';
 end $$;

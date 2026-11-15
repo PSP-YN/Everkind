@@ -33,6 +33,7 @@ import {
   localDateTime,
   safeError,
   today,
+  isStrongPassword,
 } from './utils';
 import './style.css';
 
@@ -44,6 +45,10 @@ function AuthScreen() {
     [notice, setNotice] = useState('');
   const submit = async (e) => {
     e.preventDefault();
+    if (mode === 'signup' && !isStrongPassword(password)) {
+      setNotice('Use at least 12 characters with uppercase, lowercase, a number and a symbol.');
+      return;
+    }
     setBusy(true);
     setNotice('');
     try {
@@ -97,13 +102,31 @@ function AuthScreen() {
             id="auth-password"
             name="password"
             required
-            minLength="8"
+            minLength={mode === 'signin' ? 8 : 12}
+            pattern={
+              mode === 'signin'
+                ? undefined
+                : '(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,}'
+            }
+            title={
+              mode === 'signin'
+                ? undefined
+                : 'Use 12+ characters with uppercase, lowercase, a number and a symbol.'
+            }
+            aria-describedby={mode === 'signin' ? undefined : 'password-help'}
             type="password"
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
+            placeholder={
+              mode === 'signin' ? 'Your password' : '12+ characters, mixed case, number and symbol'
+            }
           />
+          {mode === 'signup' && (
+            <small id="password-help" className="password-help">
+              12+ characters, uppercase and lowercase letters, a number and a symbol.
+            </small>
+          )}
           <button type="submit" className="primary full" disabled={busy} aria-busy={busy}>
             {busy ? <LoaderCircle className="spin" /> : null}
             {mode === 'signin' ? 'Sign in' : 'Create account'} <ArrowRight size={15} />

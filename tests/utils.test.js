@@ -7,6 +7,7 @@ import {
   formatTime,
   localDateTime,
   safeError,
+  isStrongPassword,
   today,
 } from '../src/utils.js';
 
@@ -44,4 +45,10 @@ test('formatters handle empty values safely', () => {
   assert.equal(formatTime(undefined), '—');
   assert.equal(safeError({ message: 'Request failed' }), 'Request failed');
   assert.equal(safeError(null), 'Something went wrong. Please try again.');
+});
+
+test('password policy requires length and character diversity', () => {
+  assert.equal(isStrongPassword('GoodPass123!'), true);
+  assert.equal(isStrongPassword('short'), false);
+  assert.equal(isStrongPassword('lowercaseonly123!'), false);
 });

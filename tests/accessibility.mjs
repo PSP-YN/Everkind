@@ -233,6 +233,19 @@ try {
   const auth = await appPage({ authenticated: false });
   await audit(auth.page, 'sign-in');
   await auth.page.getByRole('button', { name: /New to Everkind/ }).click();
+  const signupPassword = auth.page.getByLabel('Password');
+  await signupPassword.fill('weak-password');
+  const weakPasswordValidity = await signupPassword.evaluate((element) => ({
+    valid: element.validity.valid,
+    patternMismatch: element.validity.patternMismatch,
+  }));
+  if (weakPasswordValidity.valid || !weakPasswordValidity.patternMismatch) {
+    throw new Error('Signup password policy did not reject a weak password');
+  }
+  await signupPassword.fill('GoodPass123!');
+  if (!(await signupPassword.evaluate((element) => element.validity.valid))) {
+    throw new Error('Signup password policy rejected a valid strong password');
+  }
   await audit(auth.page, 'sign-up');
   await auth.context.close();
 

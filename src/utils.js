@@ -77,3 +77,14 @@ export function formatTime(value) {
 export function safeError(error) {
   return error?.message || 'Something went wrong. Please try again.';
 }
+
+export function isStrongPassword(value) {
+  return (
+    typeof value === 'string' &&
+    value.length >= 12 &&
+    /[a-z]/.test(value) &&
+    /[A-Z]/.test(value) &&
+    /[0-9]/.test(value) &&
+    /[^A-Za-z0-9]/.test(value)
+  );
+}

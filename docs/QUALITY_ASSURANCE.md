@@ -44,7 +44,7 @@ Implemented measures include:
 
 The latest local automated run recorded:
 
-- Unit tests: 6 passed, 0 failed.
+- Unit tests: 7 passed, 0 failed.
 - axe-core: 0 violations in each audited state.
 - Mobile viewport: 0px horizontal overflow.
 - ESLint: passed with no warnings or errors.
@@ -68,3 +68,7 @@ Before a real-world deployment, manually verify with a keyboard and screen reade
 ## Clinical and privacy boundary
 
 This is a hackathon prototype, not a certified medical device or clinical record system. Do not use it to make medication decisions or for emergency care. Before real patient use, complete a privacy impact assessment, applicable legal review, threat model, penetration test, backup/restore drill and independent clinical usability review.
+
+## External platform security control
+
+The Supabase Security Advisor currently reports one platform-level warning: leaked-password protection is disabled. Supabase documents that control as available on Pro and above ([password security documentation](https://supabase.com/docs/guides/auth/password-security)). The connected organization is on the Free plan, so the toggle cannot be enabled without a paid plan change. The signup form now requires 12+ characters with uppercase, lowercase, a number and a symbol, but this client-side rule is not a substitute for server-side breached-password screening. No plan upgrade or recurring charge was initiated. Database RLS, anonymous-role restrictions, service-only secret validation and the expanded live SQL smoke test are passing.
