@@ -1,27 +1,79 @@
-# Everkind — Care, connected.
+# Everkind — Care, connected
 
-An accessibility-first elderly-care coordination prototype for medication routines, appointments and family collaboration.
+**Challenge vertical:** Elderly Care & Medication Management Platform (PromptWars × Catalyst).
 
-## Working preview
-- Responsive family-care dashboard and adherence overview.
-- Medication creation, schedules and dose logging.
-- Appointment creation and visit overview.
-- Care-circle view and invitation UI.
-- Browser-local persistence for the live preview.
-- Safety copy distinguishing care organization from medical advice.
+Everkind is an accessibility-first, collaborative care workspace for older adults and the people they choose to involve. It centralizes medication schedules, dose-adherence records, doctor appointments, care-circle membership and reminders while keeping the care recipient at the centre of decisions.
 
-## Backend foundation
-The repository also includes a Supabase schema with row-level security, membership roles, hashed one-time invitations, dose records, appointment records, notification preferences, delivery records and audit events. Edge Functions implement invitation creation/redemption and a Resend-backed reminder worker. Setup instructions are in supabase/README.md.
+## What works
 
-**The backend is not yet connected to the live preview.** The current Vercel deployment stores records in the visitor's browser (localStorage), so users do not share or synchronize records. The invitation code shown in the UI is illustrative and is not an authentication credential. Email reminders are not being sent. Do not enter real patient data.
+- Email/password registration and sign-in through Supabase Auth.
+- Care profile creation and invitation-code joining.
+- Shared cloud records for medications, dose schedules, adherence and appointments.
+- Role-aware access: owner, care recipient, caregiver and family.
+- One-use invitation codes, hashed at rest, optionally email-bound and expiring after 48 hours.
+- Care-circle access revocation through an authenticated server function.
+- Row Level Security on all application tables.
+- Realtime subscriptions for shared care updates.
+- Audit trail for medication, dose, appointment and membership changes.
+- Per-profile reminder preferences and a rolling two-week dose generator.
+- Responsive UI with keyboard-friendly native form controls and clear safety language.
 
-## Production activation
-A dedicated Supabase project, migration deployment, function secrets, Resend sender verification, scheduled invocation and end-to-end authorization/email tests are still required. The frontend also needs Supabase Auth and database integration before the shared-care workflow can be considered live.
+## How the solution works
+
+1. A user creates an account and verifies their email through Supabase Auth.
+2. They create a care profile or redeem an invitation from an existing care circle.
+3. The profile owner, care recipient or an authorized caregiver can add medication schedules and appointments.
+4. A rolling dose window creates pending dose records. Authorized members record dose outcomes; the database records who and when.
+5. RLS checks membership and role on every client database request. Membership writes and invitation validation stay server-side.
+6. Realtime subscriptions refresh the shared workspace when authorized records change.
+7. A scheduled Edge Function checks dose and appointment windows and sends email notifications through Resend when provider credentials are configured.
+
+## Architecture
+
+- **Frontend:** React 18, Vite 6, Lucide.
+- **Identity and data:** Supabase Auth, PostgreSQL 17, PostgREST, RLS.
+- **Server-side workflows:** Supabase Edge Functions (Deno).
+- **Scheduling:** pg_cron; asynchronous HTTP through pg_net; secret storage in Supabase Vault.
+- **Email:** Resend (requires a user-provided API key and a verified sender).
+- **Hosting:** Vercel.
 
 ## Run locally
-npm install
-npm run dev
-npm run build
 
-## Stack
-React, Vite, Lucide icons, CSS, Supabase (backend foundation).
+Requirements: Node.js 20+, npm.
+
+```bash
+npm ci
+cp .env.example .env.local
+# Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local
+npm run dev
+```
+
+Production build and dependency audit:
+
+```bash
+npm run build
+npm audit
+```
+
+## Supabase setup
+
+The connected project is documented in [supabase/README.md](supabase/README.md). SQL migrations are in `supabase/migrations/`; Edge Functions are in `supabase/functions/`; database smoke checks are in `supabase/tests/`.
+
+Frontend environment variables:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY` (use the Supabase publishable key; it is public by design and relies on RLS)
+
+Never put a Supabase service-role/secret key, Resend API key or reminder cron secret in frontend variables.
+
+## Assumptions and safety boundaries
+
+- The care profile timezone defaults to `Asia/Kolkata`.
+- Users enter medication names, doses and schedules exactly as directed by a licensed clinician. Everkind does not prescribe, calculate dosages or recommend medication changes.
+- A family member receives read access and may record a dose outcome; caregivers and care recipients can manage care-plan data.
+- Invitations are valid for 48 hours and are single-use. If an email is specified, the redeeming account must match it.
+- Email reminders are inactive until a Resend API key and verified sender are configured and the scheduled delivery job is enabled.
+- The current project is a hackathon prototype, not a certified clinical system. Do not use it for emergency care or enter sensitive real patient information without completing legal, privacy, operational and security reviews.
+
+## Current deployment
+
+The frontend is deployed on Vercel and connected to the Everkind Supabase project. Email delivery still requires the Resend credentials and sender verification described above.

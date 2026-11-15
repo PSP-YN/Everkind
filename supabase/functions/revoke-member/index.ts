@@ -1,0 +1,14 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
+const out=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{...cors,"Content-Type":"application/json"}});
+Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{headers:cors});if(req.method!=="POST")return out({error:"POST required"},405);
+const url=Deno.env.get("SUPABASE_URL")!,anon=Deno.env.get("SUPABASE_ANON_KEY")!,key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,auth=req.headers.get("Authorization");if(!auth)return out({error:"Sign in first"},401);
+const userClient=createClient(url,anon,{global:{headers:{Authorization:auth}}}),{data:{user}}=await userClient.auth.getUser();if(!user)return out({error:"Invalid session"},401);
+let body:any;try{body=await req.json()}catch{return out({error:"Invalid request"},400)}if(typeof body.member_id!=="string")return out({error:"Invalid member"},400);
+const {data:target,error:lookupError}=await userClient.from("care_members").select("id,profile_id,user_id,role,status").eq("id",body.member_id).maybeSingle();if(lookupError||!target)return out({error:"Member not found"},404);
+const {data:caller}=await userClient.from("care_members").select("role").eq("profile_id",target.profile_id).eq("user_id",user.id).eq("status","active").maybeSingle();if(!caller||!["owner","care_recipient","caregiver"].includes(caller.role))return out({error:"You cannot manage this care circle"},403);
+if(target.role==="owner")return out({error:"The profile owner cannot be removed"},409);
+if(target.user_id===user.id)return out({error:"Use account settings to leave this care circle"},409);
+const admin=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+const {error}=await admin.from("care_members").update({status:"revoked"}).eq("id",target.id).eq("status","active");if(error)return out({error:"Could not revoke access"},500);
+return out({ok:true});});

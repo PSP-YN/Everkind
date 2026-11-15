@@ -1,31 +1,47 @@
-# Supabase backend setup
+# Supabase backend — Everkind
 
-The React application is currently a browser-local demo. The SQL migration and Edge Functions in this folder are a backend implementation foundation; they are not active until a Supabase project is provisioned, configured, deployed and tested.
+Project ref: `jjhnfvrcsolgnchnguyu`
 
-## Migration
-Apply migrations/202611150001_initial_care_schema.sql to a new, dedicated project. It creates care profiles, memberships, hashed invitations, medications, dose logs, appointments, reminder preferences, delivery records and audit events. RLS is enabled on every public table. The private schema contains authorization helpers.
+## Database migrations
+
+The migration files are ordered to match the migrations already applied to the live project:
+
+1. `20261115065215_initial_everkind_care_schema.sql` — care profiles, memberships, invitations, medication/dose records, appointments, preferences, notification deliveries, audit events, RLS and base indexes.
+2. `20261115065424_dose_scheduler_realtime_and_security_hardening.sql` — immutable profile ownership, server-only membership changes, safe dose scheduling/recording policies, rolling dose generator and supporting indexes.
+3. `20261115065453_enable_cron_net_and_schedule_doses.sql` — pg_cron/pg_net and the daily rolling dose-generation job.
+4. `20261115065556_dose_outcome_permissions_and_secret_validation.sql` — column-limited dose outcome writes and server-only Vault-backed reminder-secret validation.
+5. `20261115070052_revoke_anonymous_data_api_access.sql` — explicit anonymous-role revocation and final least-privilege grants.
+
+All nine application tables have RLS enabled. Membership writes and invitation redemption are performed by authenticated Edge Functions using the service role; ordinary browser clients cannot write membership rows directly.
 
 ## Edge Functions
-- create-invite: requires a signed-in user with owner, care-recipient or caregiver permission; creates a hashed, 48-hour, one-use invitation.
-- redeem-invite: requires sign-in; checks the invite hash, expiry, one-use state and optional email binding before adding membership.
-- send-reminders: requires x-cron-secret; uses Resend to notify active care-circle members about doses due within their configured lead time, sufficiently overdue pending doses, and upcoming appointments. A unique event key prevents duplicate delivery.
 
-## Required server-side secrets
-Set these in Supabase Edge Function secrets, never in Vite client variables:
-- SUPABASE_URL
-- SUPABASE_ANON_KEY
-- SUPABASE_SERVICE_ROLE_KEY
-- RESEND_API_KEY
-- REMINDER_FROM_EMAIL (a sender/domain verified in Resend)
-- REMINDER_CRON_SECRET (long random secret)
+- `create-invite` (JWT required): manager-only invitation creation; random code, SHA-256 hash at rest, optional email binding, 48-hour expiry.
+- `redeem-invite` (JWT required): validates code, expiry and email, claims it once, then creates membership server-side.
+- `revoke-member` (JWT required): manager-only membership revocation; owner membership cannot be revoked.
+- `send-reminders` (JWT disabled): validates a Vault-backed cron secret through a server-only RPC, then sends dose/appointment reminders through Resend.
 
-The send-reminders function is deliberately not JWT-authenticated because it is called by a scheduler; it independently checks REMINDER_CRON_SECRET. Keep the secret private.
+## Scheduling and secrets
 
-## Scheduling
-After deploying the functions and setting secrets, configure a Supabase Cron job (for example, every 5 minutes) to POST to /functions/v1/send-reminders with header x-cron-secret set to the stored secret. Do not put the secret in client code or public SQL history. Confirm successful delivery and failed-delivery logging before enabling real notifications.
+- `everkind-generate-future-doses` runs daily at 00:05 UTC and maintains a rolling 14-day dose window.
+- `everkind_project_url`, `everkind_publishable_key` and `everkind_reminder_cron_secret` are stored in Supabase Vault.
+- `public.validate_reminder_secret(text)` is executable only by `service_role`; the Edge Function validates the cron header without exposing the secret to the browser.
+- Reminder delivery is intentionally inactive until `RESEND_API_KEY` and `REMINDER_FROM_EMAIL` are configured as Edge Function secrets and the sender is verified with Resend. Do not schedule the delivery job before then.
 
-## Client integration still required
-Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY only after provisioning the project, then implement and test sign-in, profile creation, profile switching, realtime/shared reads, CRUD, role-aware controls, invite creation/redemption and notification preference persistence. Never expose the service-role key in the browser.
+## Frontend configuration
 
-## Safety
-Do not enter real patient data in the current Vercel preview. Validate timezone/DST behavior, email consent, rate limits, audit retention, account recovery, accessibility with older adults, and privacy/legal requirements before production use.
+The Vercel app uses Supabase Auth and the Data API with only the publishable key. The service-role key, Resend key and cron secret must never be exposed to browser variables.
+
+Set these local variables in `.env.local`:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY` (the Supabase publishable key; public by design and constrained by RLS)
+
+## Verification
+
+Run `tests/security_smoke.sql` against the project SQL editor or a linked test database. It checks schema presence, RLS, least-privilege grants, server-only membership writes, dose column permissions, cron setup and reminder-secret validation.
+
+The live database has passed this smoke test and the Supabase security advisor returned no findings at the last check. Performance-advisor notices were limited to currently unused indexes on the new workload.
+
+## Safety boundary
+
+Everkind organizes care; it is not medical advice, an emergency service or a certified clinical system. Users must enter medication names, doses and schedules exactly as directed by a licensed clinician. Do not enter real patient information until privacy, legal, operational and security reviews are complete.

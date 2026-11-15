@@ -1,7 +1,8 @@
-node_modules
-dist
-.vercel
+node_modules/
+dist/
+.vercel/
 .env
 .env.*
 !.env.example
 supabase/.temp/
+Catalyst_Meeting_Summary.pdf
