@@ -22,6 +22,10 @@ The gates include:
 
 GitHub Actions runs the same gates on pushes and pull requests to `main`. The Playwright browser tests use a mocked Supabase session, REST responses and Edge Function responses; they do not access or modify live care data. Interaction checks exercise owner-bound profile creation, joining a care circle with a correctly formatted 128-bit invitation code, marking a dose taken with authenticated recorder and timestamp, medication creation with a 14-day schedule, appointment creation with the authenticated creator, vital-log creation with the authenticated recorder, invitation creation with email binding, saving reminder preferences, keyboard dialog focus and mobile navigation. The suite also fails on uncaught browser errors or unexpected third-party requests. The onboarding browser test verifies that the authenticated user ID is bound as `owner_id` against mocked API responses. Separately, `supabase/tests/profile_onboarding_live.sql` was run against the connected production database in a transaction as the authenticated role: profile INSERT succeeded, the owner could read the inserted row (count 1), and the transaction rolled back. `supabase/tests/scheduler_live.sql` exercises daily and weekly schedules in two different timezones and rolls back its temporary rows.
 
+## Data-fetch efficiency
+
+The initial workspace load fetches its seven required datasets concurrently. The active-member query also supplies the signed-in member role, avoiding a duplicate membership lookup. Realtime changes are debounced per dataset and refresh only the affected data: appointments, members/role, vitals, doses, or medications plus their generated doses. This avoids re-fetching the entire workspace after a single row changes. Dose events are additionally filtered against the active profile's medication IDs before a refresh is scheduled.
+
 ## Accessibility implementation
 
 Everkind targets WCAG 2.1 AA. Automated checks cover the sign-in and sign-up screens, first-run onboarding, authenticated dashboard, all five workspace views, medication and appointment forms, invitation dialog, reminder preferences, safety dialog and responsive layouts at 320px, 390px and 768px (narrow mobile, mobile and tablet).
@@ -42,7 +46,7 @@ Implemented measures include:
 
 ## Test results recorded during development
 
-The latest local automated run recorded:
+The latest local automated run (15 November 2026, after the realtime refresh optimization) recorded:
 
 - Unit tests: 8 passed, 0 failed.
 - axe-core: 0 violations in all 19 audited states, including 320px, 390px and 768px layouts.

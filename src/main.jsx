@@ -400,7 +400,6 @@ function App() {
         { data: ev, error: ee },
         { data: vl, error: ve },
         { data: d, error: de },
-        { data: membership, error: roleError },
       ] = await Promise.all([
         supabase
           .from('medications')
@@ -434,13 +433,6 @@ function App() {
           .gte('due_at', start)
           .lte('due_at', end)
           .order('due_at'),
-        supabase
-          .from('care_members')
-          .select('role')
-          .eq('profile_id', p.id)
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .maybeSingle(),
       ]);
       if (me) throw me;
       if (ae) throw ae;
@@ -449,7 +441,6 @@ function App() {
       if (ee) throw ee;
       if (ve) throw ve;
       if (de) throw de;
-      if (roleError) throw roleError;
       setMeds(m || []);
       setAppts(a || []);
       setMembers(mem || []);
@@ -457,7 +448,7 @@ function App() {
       setLogs(ev || []);
       setVitals(vl || []);
       setDoses(d || []);
-      setRole(membership?.role || 'family');
+      setRole((mem || []).find((member) => member.user_id === session.user.id)?.role || 'family');
     },
     [session],
   );
@@ -473,11 +464,58 @@ function App() {
     }
   }, [profile, loadWorkspace, toast]);
   useEffect(() => {
-    if (!profile) return;
-    let refreshTimer;
-    const refresh = () => {
-      window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => loadWorkspace(profile), 180);
+    if (!profile || !session?.user) return;
+    const zone = profile.timezone || 'Asia/Kolkata';
+    const start = localDateTime(today(zone), '00:00', zone);
+    const end = localDateTime(addCalendarDays(today(zone), 2), '23:59', zone);
+    const timers = new Map();
+    const refresh = (key, task) => {
+      window.clearTimeout(timers.get(key));
+      timers.set(
+        key,
+        window.setTimeout(async () => {
+          try {
+            await task();
+          } catch (error) {
+            toast(safeError(error));
+          }
+        }, 160),
+      );
+    };
+    const refreshMedications = async () => {
+      const [
+        { data: medicationRows, error: medicationError },
+        { data: doseRows, error: doseError },
+      ] = await Promise.all([
+        supabase
+          .from('medications')
+          .select('*')
+          .eq('profile_id', profile.id)
+          .eq('active', true)
+          .order('created_at'),
+        supabase
+          .from('medication_doses')
+          .select('*,medications!inner(id,name,dose,profile_id,instructions,schedule)')
+          .eq('medications.profile_id', profile.id)
+          .gte('due_at', start)
+          .lte('due_at', end)
+          .order('due_at'),
+      ]);
+      if (medicationError) throw medicationError;
+      if (doseError) throw doseError;
+      setMeds(medicationRows || []);
+      setDoses(doseRows || []);
+    };
+    const refreshDoses = async () => {
+      const { data, error } = await supabase
+        .from('medication_doses')
+        .select('*,medications!inner(id,name,dose,profile_id,instructions,schedule)')
+        .eq('medications.profile_id', profile.id)
+        .gte('due_at', start)
+        .lte('due_at', end)
+        .order('due_at');
+      if (error) throw error;
+      setDoses(data || []);
     };
     const relevantDose = (payload) => {
       const id = payload.new?.medication_id || payload.old?.medication_id;
@@ -493,7 +531,7 @@ function App() {
           table: 'medications',
           filter: 'profile_id=eq.' + profile.id,
         },
-        refresh,
+        () => refresh('medications', refreshMedications),
       )
       .on(
         'postgres_changes',
@@ -503,7 +541,16 @@ function App() {
           table: 'appointments',
           filter: 'profile_id=eq.' + profile.id,
         },
-        refresh,
+        () =>
+          refresh('appointments', async () => {
+            const { data, error } = await supabase
+              .from('appointments')
+              .select('*')
+              .eq('profile_id', profile.id)
+              .order('starts_at');
+            if (error) throw error;
+            setAppts(data || []);
+          }),
       )
       .on(
         'postgres_changes',
@@ -513,7 +560,20 @@ function App() {
           table: 'care_members',
           filter: 'profile_id=eq.' + profile.id,
         },
-        refresh,
+        () =>
+          refresh('members', async () => {
+            const { data: memberRows, error } = await supabase
+              .from('care_members')
+              .select('id,user_id,role,status,created_at')
+              .eq('profile_id', profile.id)
+              .eq('status', 'active');
+            if (error) throw error;
+            setMembers(memberRows || []);
+            setRole(
+              (memberRows || []).find((member) => member.user_id === session.user.id)?.role ||
+                'family',
+            );
+          }),
       )
       .on(
         'postgres_changes',
@@ -523,21 +583,31 @@ function App() {
           table: 'vital_logs',
           filter: 'profile_id=eq.' + profile.id,
         },
-        refresh,
+        () =>
+          refresh('vitals', async () => {
+            const { data, error } = await supabase
+              .from('vital_logs')
+              .select('*')
+              .eq('profile_id', profile.id)
+              .order('recorded_at', { ascending: false })
+              .limit(100);
+            if (error) throw error;
+            setVitals(data || []);
+          }),
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'medication_doses' },
         (payload) => {
-          if (relevantDose(payload)) refresh();
+          if (relevantDose(payload)) refresh('doses', refreshDoses);
         },
       )
       .subscribe();
     return () => {
-      window.clearTimeout(refreshTimer);
+      for (const timer of timers.values()) window.clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, [profile, loadWorkspace]);
+  }, [profile, session, toast]);
   const logout = async () => {
     await supabase.auth.signOut();
     setProfiles([]);
