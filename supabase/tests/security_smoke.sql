@@ -8,6 +8,7 @@ declare
   t text;
   count_tables integer;
   dose_update_check text;
+  profile_read_policy text;
 begin
   select count(*) into count_tables
   from information_schema.tables
@@ -31,6 +32,17 @@ begin
       raise exception 'Anonymous role can read public.%', t;
     end if;
   end loop;
+
+  select qual into profile_read_policy
+  from pg_policies
+  where schemaname='public' and tablename='care_profiles'
+    and policyname='owners and members read care profiles';
+  if profile_read_policy is null
+     or position('owner_id' in profile_read_policy)=0
+     or position('auth.uid' in profile_read_policy)=0
+     or position('is_care_member' in profile_read_policy)=0 then
+    raise exception 'Care profile SELECT policy must allow owners and active care-circle members';
+  end if;
 
   if has_schema_privilege('anon','private','USAGE') then
     raise exception 'Anonymous role must not use the private schema';

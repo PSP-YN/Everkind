@@ -20,7 +20,7 @@ The gates include:
 | Browser accessibility | `npm run test:a11y`                | axe-core WCAG 2.1 A/AA, WCAG 2.1 AA and best-practice scans             |
 | Dependency audit      | `npm audit --audit-level=moderate` | Known dependency vulnerabilities                                        |
 
-GitHub Actions runs the same gates on pushes and pull requests to `main`. The accessibility browser tests use a mocked Supabase session and mocked REST responses; they do not access or modify live care data.
+GitHub Actions runs the same gates on pushes and pull requests to `main`. The accessibility browser tests use a mocked Supabase session and mocked REST responses; they do not access or modify live care data. The onboarding integration test submits a new care profile, verifies that the authenticated user's ID is bound as `owner_id`, and verifies that the inserted profile can be read back.
 
 ## Accessibility implementation
 

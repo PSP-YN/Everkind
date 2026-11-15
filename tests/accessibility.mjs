@@ -154,12 +154,35 @@ try {
       );
     }
     let doseStatus = 'pending';
+    let currentProfiles = profiles;
     await page.route(supabaseUrl + '/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data = [];
       const method = route.request().method();
       if (path.endsWith('/auth/v1/user')) data = user;
-      else if (path.endsWith('/rest/v1/care_profiles')) data = profiles;
+      else if (path.endsWith('/rest/v1/care_profiles') && method === 'POST') {
+        const payload = JSON.parse(route.request().postData() || '{}');
+        if (payload.owner_id !== userId) {
+          await route.fulfill({
+            status: 403,
+            contentType: 'application/json',
+            body: JSON.stringify({ message: 'RLS owner check failed' }),
+          });
+          return;
+        }
+        const created = {
+          ...profile,
+          display_name: payload.display_name,
+          timezone: payload.timezone,
+        };
+        currentProfiles = [created];
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/vnd.pgrst.object+json',
+          body: JSON.stringify(created),
+        });
+        return;
+      } else if (path.endsWith('/rest/v1/care_profiles')) data = currentProfiles;
       else if (path.endsWith('/rest/v1/care_members')) {
         const params = new URL(route.request().url()).searchParams;
         const owner = {
@@ -252,6 +275,11 @@ try {
   const onboarding = await appPage({ profiles: [] });
   await onboarding.page.waitForSelector('.onboarding');
   await audit(onboarding.page, 'first-run onboarding');
+  await onboarding.page.getByLabel("Care recipient's name").fill('Test Care Recipient');
+  await onboarding.page.getByRole('button', { name: /Create care profile/ }).click();
+  await onboarding.page.waitForSelector('.shell');
+  await onboarding.page.getByText('Test Care Recipient', { exact: true }).waitFor();
+  console.log('PASS onboarding creates and reads back an owner-bound care profile');
   await onboarding.context.close();
 
   const app = await appPage();
