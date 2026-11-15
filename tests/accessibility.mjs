@@ -172,6 +172,7 @@ try {
     let createdRedeemPayload = null;
     let doseUpdatePayload = null;
     let preferenceUpdatePayload = null;
+    let createdVitalPayload = null;
     await page.route(supabaseUrl + '/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data = [];
@@ -221,6 +222,10 @@ try {
           id: '13131313-1313-4131-8131-' + String(index + 1).padStart(12, '0'),
           medications: currentMedications[currentMedications.length - 1],
         }));
+        await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+        return;
+      } else if (path.endsWith('/rest/v1/vital_logs') && method === 'POST') {
+        createdVitalPayload = JSON.parse(route.request().postData() || '{}');
         await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
         return;
       } else if (path.endsWith('/rest/v1/appointments') && method === 'POST') {
@@ -346,6 +351,9 @@ try {
       get preferenceUpdatePayload() {
         return preferenceUpdatePayload;
       },
+      get createdVitalPayload() {
+        return createdVitalPayload;
+      },
     };
   }
 
@@ -433,6 +441,7 @@ try {
   for (const [label, name] of [
     ['medications', /^Medications/],
     ['appointments', 'Appointments'],
+    ['vitals', 'Vitals'],
     ['care circle', 'Care circle'],
     ['overview', 'Overview'],
   ]) {
@@ -547,6 +556,30 @@ try {
   }
   console.log('PASS reminder preferences persist all selected values');
 
+  await page.getByRole('button', { name: 'Vitals', exact: true }).click();
+  await audit(page, 'vitals view');
+  await page.getByLabel('Measurement').selectOption('blood_pressure');
+  await page.getByLabel('Systolic').fill('120');
+  await page.getByLabel('Diastolic').fill('80');
+  await page.getByLabel('Context (optional)').fill('After breakfast');
+  await page.getByRole('button', { name: /Save reading/ }).click();
+  if (
+    app.createdVitalPayload?.profile_id !== profile.id ||
+    app.createdVitalPayload?.recorded_by !== userId ||
+    app.createdVitalPayload?.metric !== 'blood_pressure' ||
+    app.createdVitalPayload?.value !== 120 ||
+    app.createdVitalPayload?.secondary_value !== 80 ||
+    app.createdVitalPayload?.unit !== 'mmHg'
+  ) {
+    throw new Error(
+      'Vital reading did not persist the authenticated recorder, profile, metric and values',
+    );
+  }
+  console.log(
+    'PASS vitals capture persists blood pressure with authenticated recorder and profile',
+  );
+  await audit(page, 'vitals entry state');
+
   await page.getByRole('button', { name: 'Safety & privacy' }).click();
   await audit(page, 'safety and privacy dialog');
   await app.context.close();
@@ -558,7 +591,7 @@ try {
     throw new Error('Mobile sign-out action is not reachable');
   }
   const mobileNavigation = mobile.page.getByRole('navigation', { name: 'Primary navigation' });
-  for (const label of ['Overview', 'Medications', 'Appointments', 'Care circle']) {
+  for (const label of ['Overview', 'Medications', 'Appointments', 'Vitals', 'Care circle']) {
     if (!(await mobileNavigation.getByRole('button', { name: new RegExp(label) }).isVisible())) {
       throw new Error('Mobile primary navigation is missing ' + label);
     }

@@ -20,11 +20,11 @@ The gates include:
 | Browser accessibility | `npm run test:a11y`                | axe-core WCAG 2.1 A/AA, WCAG 2.1 AA and best-practice scans             |
 | Dependency audit      | `npm audit --audit-level=moderate` | Known dependency vulnerabilities                                        |
 
-GitHub Actions runs the same gates on pushes and pull requests to `main`. The Playwright browser tests use a mocked Supabase session, REST responses and Edge Function responses; they do not access or modify live care data. Interaction checks exercise owner-bound profile creation, joining a care circle with a correctly formatted 128-bit invitation code, marking a dose taken with authenticated recorder and timestamp, medication creation with a 14-day schedule, appointment creation with the authenticated creator, invitation creation with email binding, saving reminder preferences, keyboard dialog focus and mobile navigation. The suite also fails on uncaught browser errors or unexpected third-party requests. The onboarding browser test verifies that the authenticated user ID is bound as `owner_id` against mocked API responses. Separately, `supabase/tests/profile_onboarding_live.sql` was run against the connected production database in a transaction as the authenticated role: profile INSERT succeeded, the owner could read the inserted row (count 1), and the transaction rolled back. `supabase/tests/scheduler_live.sql` exercises daily and weekly schedules in two different timezones and rolls back its temporary rows.
+GitHub Actions runs the same gates on pushes and pull requests to `main`. The Playwright browser tests use a mocked Supabase session, REST responses and Edge Function responses; they do not access or modify live care data. Interaction checks exercise owner-bound profile creation, joining a care circle with a correctly formatted 128-bit invitation code, marking a dose taken with authenticated recorder and timestamp, medication creation with a 14-day schedule, appointment creation with the authenticated creator, vital-log creation with the authenticated recorder, invitation creation with email binding, saving reminder preferences, keyboard dialog focus and mobile navigation. The suite also fails on uncaught browser errors or unexpected third-party requests. The onboarding browser test verifies that the authenticated user ID is bound as `owner_id` against mocked API responses. Separately, `supabase/tests/profile_onboarding_live.sql` was run against the connected production database in a transaction as the authenticated role: profile INSERT succeeded, the owner could read the inserted row (count 1), and the transaction rolled back. `supabase/tests/scheduler_live.sql` exercises daily and weekly schedules in two different timezones and rolls back its temporary rows.
 
 ## Accessibility implementation
 
-Everkind targets WCAG 2.1 AA. Automated checks cover the sign-in and sign-up screens, first-run onboarding, authenticated dashboard, all four workspace views, medication and appointment forms, invitation dialog, reminder preferences, safety dialog and responsive layouts at 320px, 390px and 768px (narrow mobile, mobile and tablet).
+Everkind targets WCAG 2.1 AA. Automated checks cover the sign-in and sign-up screens, first-run onboarding, authenticated dashboard, all five workspace views, medication and appointment forms, invitation dialog, reminder preferences, safety dialog and responsive layouts at 320px, 390px and 768px (narrow mobile, mobile and tablet).
 
 Implemented measures include:
 
@@ -45,7 +45,7 @@ Implemented measures include:
 The latest local automated run recorded:
 
 - Unit tests: 8 passed, 0 failed.
-- axe-core: 0 violations in all 17 audited states, including 320px, 390px and 768px layouts.
+- axe-core: 0 violations in all 19 audited states, including 320px, 390px and 768px layouts.
 - Mobile viewport: 0px horizontal overflow.
 - ESLint: passed with no warnings or errors.
 - Production build: passed.

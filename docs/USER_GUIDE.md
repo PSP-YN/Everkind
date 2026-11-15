@@ -45,7 +45,11 @@ Daily schedules create one dose per configured time for each day in the rolling 
 
 Open **Appointments**, add the clinician, specialty, date/time, location and useful visit notes, then save. Check the displayed timezone and date before confirming. Update or cancel appointments when plans change.
 
-## 6. Invite and manage members
+## 6. Record vital observations
+
+Open **Vitals** and choose a measurement type: blood pressure, heart rate, temperature, weight or blood glucose. Enter the value as measured, including systolic and diastolic values for blood pressure. Optional context can be added without interpreting the result. Readings are append-only, timestamped and attributed to the signed-in member; active care-circle members can read them. Everkind does not set clinical thresholds, diagnose, or recommend treatment.
+
+## 7. Invite and manage members
 
 Open **Care circle** and create an invitation. Select the access role and, where appropriate, bind it to the intended email address. Share the one-time code privately; do not post it publicly.
 
@@ -56,7 +60,7 @@ Open **Care circle** and create an invitation. Select the access role and, where
 
 Managers can revoke a member's access. Revocation is enforced by database membership checks and takes effect on subsequent requests. Do not share an account password; each person should use their own account and invitation.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 ### "new row violates row-level security policy" while creating a care profile
 
@@ -85,6 +89,6 @@ Check the care profile's timezone. Everkind currently defaults new profiles to `
 
 Refresh the page. Realtime updates are best-effort; the database remains the source of truth. Verify the saved record before relying on a displayed status.
 
-## 8. Safety and privacy
+## 9. Safety and privacy
 
 Use fictional or test data in this hackathon deployment. Do not enter real patient details, diagnoses, prescriptions, contact information or other sensitive health information until legal, privacy, clinical and security reviews are complete. Do not rely on Everkind for emergency response, clinical decisions or medication advice.

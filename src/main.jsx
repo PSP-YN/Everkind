@@ -275,7 +275,15 @@ function App() {
     [doses, setDoses] = useState([]),
     [appts, setAppts] = useState([]),
     [logs, setLogs] = useState([]),
+    [vitals, setVitals] = useState([]),
     [prefs, setPrefs] = useState(null);
+  const [vitalForm, setVitalForm] = useState({
+    metric: 'blood_pressure',
+    value: '',
+    secondary_value: '',
+    unit: 'mmHg',
+    notes: '',
+  });
   const [tab, setTab] = useState('Overview'),
     [modal, setModal] = useState(''),
     [busy, setBusy] = useState(false),
@@ -390,6 +398,7 @@ function App() {
         { data: mem, error: meme },
         { data: pr, error: pe },
         { data: ev, error: ee },
+        { data: vl, error: ve },
         { data: d, error: de },
         { data: membership, error: roleError },
       ] = await Promise.all([
@@ -413,6 +422,12 @@ function App() {
           .order('created_at', { ascending: false })
           .limit(12),
         supabase
+          .from('vital_logs')
+          .select('*')
+          .eq('profile_id', p.id)
+          .order('recorded_at', { ascending: false })
+          .limit(100),
+        supabase
           .from('medication_doses')
           .select('*,medications!inner(id,name,dose,profile_id,instructions,schedule)')
           .eq('medications.profile_id', p.id)
@@ -432,6 +447,7 @@ function App() {
       if (meme) throw meme;
       if (pe) throw pe;
       if (ee) throw ee;
+      if (ve) throw ve;
       if (de) throw de;
       if (roleError) throw roleError;
       setMeds(m || []);
@@ -439,6 +455,7 @@ function App() {
       setMembers(mem || []);
       setPrefs(pr);
       setLogs(ev || []);
+      setVitals(vl || []);
       setDoses(d || []);
       setRole(membership?.role || 'family');
     },
@@ -494,6 +511,16 @@ function App() {
           event: '*',
           schema: 'public',
           table: 'care_members',
+          filter: 'profile_id=eq.' + profile.id,
+        },
+        refresh,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'vital_logs',
           filter: 'profile_id=eq.' + profile.id,
         },
         refresh,
@@ -573,6 +600,38 @@ function App() {
       await loadWorkspace(profile);
       toast('Dose recorded');
     });
+  const addVital = async (e) => {
+    e.preventDefault();
+    await run(async () => {
+      const metric = vitalForm.metric;
+      const units = {
+        blood_pressure: 'mmHg',
+        heart_rate: 'bpm',
+        temperature: '°C',
+        weight: 'kg',
+        blood_glucose: 'mg/dL',
+      };
+      const { error } = await supabase.from('vital_logs').insert({
+        profile_id: profile.id,
+        recorded_by: session.user.id,
+        metric,
+        value: Number(vitalForm.value),
+        secondary_value: metric === 'blood_pressure' ? Number(vitalForm.secondary_value) : null,
+        unit: units[metric],
+        notes: vitalForm.notes.trim() || null,
+      });
+      if (error) throw error;
+      setVitalForm({
+        metric: 'blood_pressure',
+        value: '',
+        secondary_value: '',
+        unit: 'mmHg',
+        notes: '',
+      });
+      await loadWorkspace(profile);
+      toast('Vital reading saved');
+    });
+  };
   const addAppointment = async (e) => {
     e.preventDefault();
     await run(async () => {
@@ -682,6 +741,7 @@ function App() {
     ['Overview', Home],
     ['Medications', Pill],
     ['Appointments', CalendarDays],
+    ['Vitals', Activity],
     ['Care circle', Users],
   ];
   const isManager = ['owner', 'care_recipient', 'caregiver'].includes(role);
@@ -1208,6 +1268,174 @@ function App() {
                   No appointments yet. Add the next visit to keep everyone informed.
                 </div>
               )}
+            </>
+          )}
+          {tab === 'Vitals' && (
+            <>
+              <div className="intro">
+                <div>
+                  <p className="eyebrow">CARE PLAN / OBSERVATIONS</p>
+                  <h1>Vitals & observations</h1>
+                  <p>
+                    Record measurements as provided by the care team. Everkind does not interpret or
+                    diagnose readings.
+                  </p>
+                </div>
+              </div>
+              <section className="panel vital-entry">
+                <div className="panelhead">
+                  <div>
+                    <h2>Record a reading</h2>
+                    <p>Measurements are shared with active members of this care circle.</p>
+                  </div>
+                </div>
+                <form onSubmit={addVital}>
+                  <label>
+                    Measurement
+                    <select
+                      value={vitalForm.metric}
+                      onChange={(e) => {
+                        const metric = e.target.value;
+                        const units = {
+                          blood_pressure: 'mmHg',
+                          heart_rate: 'bpm',
+                          temperature: '°C',
+                          weight: 'kg',
+                          blood_glucose: 'mg/dL',
+                        };
+                        setVitalForm({
+                          ...vitalForm,
+                          metric,
+                          unit: units[metric],
+                          secondary_value: '',
+                        });
+                      }}
+                    >
+                      <option value="blood_pressure">Blood pressure</option>
+                      <option value="heart_rate">Heart rate</option>
+                      <option value="temperature">Temperature</option>
+                      <option value="weight">Weight</option>
+                      <option value="blood_glucose">Blood glucose</option>
+                    </select>
+                  </label>
+                  <div className="formtwo">
+                    <label>
+                      {vitalForm.metric === 'blood_pressure' ? 'Systolic' : 'Reading'}
+                      <input
+                        required
+                        type="number"
+                        min="0.01"
+                        max="99999"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={vitalForm.value}
+                        onChange={(e) => setVitalForm({ ...vitalForm, value: e.target.value })}
+                        placeholder={
+                          vitalForm.metric === 'blood_pressure'
+                            ? 'e.g. 120'
+                            : 'Enter measured value'
+                        }
+                      />
+                    </label>
+                    {vitalForm.metric === 'blood_pressure' ? (
+                      <label>
+                        Diastolic
+                        <input
+                          required
+                          type="number"
+                          min="0.01"
+                          max="99999"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={vitalForm.secondary_value}
+                          onChange={(e) =>
+                            setVitalForm({ ...vitalForm, secondary_value: e.target.value })
+                          }
+                          placeholder="e.g. 80"
+                        />
+                      </label>
+                    ) : (
+                      <label>
+                        Unit
+                        <input readOnly value={vitalForm.unit} aria-label="Measurement unit" />
+                      </label>
+                    )}
+                  </div>
+                  <label>
+                    Context (optional)
+                    <input
+                      maxLength="500"
+                      value={vitalForm.notes}
+                      onChange={(e) => setVitalForm({ ...vitalForm, notes: e.target.value })}
+                      placeholder="e.g. taken before breakfast"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="primary"
+                    disabled={
+                      busy ||
+                      !vitalForm.value ||
+                      (vitalForm.metric === 'blood_pressure' && !vitalForm.secondary_value)
+                    }
+                    aria-busy={busy}
+                  >
+                    Save reading <ArrowRight size={15} />
+                  </button>
+                </form>
+              </section>
+              <section className="panel" style={{ marginTop: 16 }}>
+                <div className="panelhead">
+                  <div>
+                    <h2>Recent readings</h2>
+                    <p>Newest first · timestamps shown in the care profile timezone</p>
+                  </div>
+                  <span className="tag">{vitals.length} RECORDS</span>
+                </div>
+                {vitals.map((v) => (
+                  <div className="vital-row" key={v.id}>
+                    <div>
+                      <b>
+                        {
+                          {
+                            blood_pressure: 'Blood pressure',
+                            heart_rate: 'Heart rate',
+                            temperature: 'Temperature',
+                            weight: 'Weight',
+                            blood_glucose: 'Blood glucose',
+                          }[v.metric]
+                        }
+                      </b>
+                      <small>
+                        {formatDate(v.recorded_at, undefined, timeZone)} ·{' '}
+                        {formatTime(v.recorded_at, timeZone)}
+                      </small>
+                      {v.notes && <small>{v.notes}</small>}
+                    </div>
+                    <strong>
+                      {v.metric === 'blood_pressure'
+                        ? v.value + '/' + v.secondary_value + ' ' + v.unit
+                        : v.value + ' ' + v.unit}
+                    </strong>
+                  </div>
+                ))}
+                {!vitals.length && (
+                  <div className="empty">
+                    No readings recorded yet. Add a measurement when one is available.
+                  </div>
+                )}
+              </section>
+              <div className="notice">
+                <ShieldCheck />
+                <div>
+                  <b>Measurement safety</b>
+                  <p>
+                    Readings are stored as observations only. Everkind does not set clinical
+                    thresholds, interpret results, recommend treatment or replace professional
+                    medical advice. If a reading is concerning, contact the person's clinician.
+                  </p>
+                </div>
+              </div>
             </>
           )}
           {tab === 'Care circle' && (

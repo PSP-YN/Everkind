@@ -18,7 +18,7 @@ Users must use individual accounts. Never share passwords or invitation codes pu
 
 ## Authorization and RLS
 
-All nine public application tables have RLS enabled. Policies use the authenticated user identity and private membership helper functions. The helper functions use a fixed empty search path and are not executable by anonymous users.
+All ten public application tables have RLS enabled. Policies use the authenticated user identity and private membership helper functions. The helper functions use a fixed empty search path and are not executable by anonymous users.
 
 | Resource                 | Read                                     | Create/update/delete                                                                                         |
 | ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -69,7 +69,7 @@ The current deployment is a hackathon prototype. Use synthetic demo data. Do not
 
 The latest live checks recorded:
 
-- RLS enabled on all nine public tables.
+- RLS enabled on all ten public tables.
 - Anonymous table access revoked.
 - Private helper functions not executable by anon.
 - Client membership writes blocked.
@@ -93,3 +93,7 @@ If an account or secret may be compromised:
 4. Revoke suspicious care-circle memberships and outstanding invitations.
 5. Preserve audit evidence and document the incident.
 6. Do not paste credentials, tokens or patient data into issue trackers or public repositories.
+
+## Vital observations
+
+Vital logs are append-only. Active care-circle members may read readings and insert new measurements attributed to their own authenticated user ID. Anonymous access is revoked; client update and delete privileges are not granted. Database constraints restrict the metric vocabulary, positive numeric values, blood-pressure pairing and note length. Inserts create a server-side audit event. The UI records observations only and does not interpret measurements or provide clinical advice.

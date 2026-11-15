@@ -8,13 +8,14 @@ Everkind is an accessibility-first, collaborative care workspace for older adult
 
 - Email/password registration and sign-in through Supabase Auth; signup requires 12+ characters with mixed case, a number and a symbol.
 - Care profile creation and invitation-code joining.
-- Shared cloud records for medications, dose schedules, adherence and appointments.
+- Shared cloud records for medications, dose schedules, adherence, appointments and vital observations (blood pressure, heart rate, temperature, weight and blood glucose).
 - Role-aware access: owner, care recipient, caregiver and family.
 - One-use 128-bit invitation codes, SHA-256 hashed at rest, optionally email-bound, expiring after 48 hours and rate-limited to 10 creations per account per hour.
 - Care-circle access revocation through an authenticated server function.
 - Row Level Security on all application tables.
 - Realtime subscriptions for shared care updates.
-- Audit trail for medication, dose, appointment and membership changes.
+- Append-only vital readings with authenticated recorder attribution and member-scoped RLS; vital inserts are included in the audit trail.
+- Audit trail for medication, dose, appointment, vital and membership changes.
 - Per-profile reminder preferences and a rolling two-week dose generator.
 - Responsive, keyboard-operable UI with WCAG 2.1 AA-oriented semantics, visible focus, accessible dialogs, screen-reader status announcements and high-contrast text.
 

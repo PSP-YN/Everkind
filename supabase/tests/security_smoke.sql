@@ -3,7 +3,7 @@ do $$
 declare
   required_tables text[] := array[
     'care_profiles','care_members','care_invites','medications','medication_doses',
-    'appointments','notification_preferences','notification_deliveries','audit_events'
+    'appointments','notification_preferences','notification_deliveries','audit_events','vital_logs'
   ];
   t text;
   count_tables integer;
@@ -88,6 +88,28 @@ begin
      or position('recorded_by' in dose_update_check)=0
      or position('auth.uid' in dose_update_check)=0 then
     raise exception 'Dose outcome updates must bind recorded_by to the authenticated user';
+  end if;
+
+  if not has_table_privilege('authenticated','public.vital_logs','SELECT')
+     or not has_table_privilege('authenticated','public.vital_logs','INSERT') then
+    raise exception 'Active care-circle members need read and insert access to vital logs';
+  end if;
+  if has_table_privilege('authenticated','public.vital_logs','UPDATE')
+     or has_table_privilege('authenticated','public.vital_logs','DELETE')
+     or has_table_privilege('anon','public.vital_logs','SELECT') then
+    raise exception 'Vital logs must be append-only and unavailable to anonymous users';
+  end if;
+  if not exists(select 1 from pg_policies where schemaname='public' and tablename='vital_logs' and cmd='INSERT'
+    and position('recorded_by' in with_check)>0 and position('auth.uid' in with_check)>0
+    and position('is_care_member' in with_check)>0) then
+    raise exception 'Vital log inserts must bind the recorder and active care membership';
+  end if;
+
+  if not exists(
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime' and schemaname='public' and tablename='vital_logs'
+  ) then
+    raise exception 'Vital logs must be included in the Supabase Realtime publication';
   end if;
 
   if has_function_privilege('anon','public.validate_reminder_secret(text)','EXECUTE')

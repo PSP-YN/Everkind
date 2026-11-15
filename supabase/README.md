@@ -16,8 +16,11 @@ The migration files are ordered to match the migrations already applied to the l
 8. `20261115091903_owner_can_read_own_care_profile.sql` — permits a profile owner to read their newly inserted profile during PostgREST INSERT ... RETURNING.
 9. `20261115100000_profile_timezone_dose_window.sql` — computes the scheduler window from each profile's local calendar date instead of the database UTC date.
 10. `20261115100500_exact_fourteen_local_days.sql` — bounds the rolling window to exactly 14 local calendar dates, including today.
+11. `20261115110000_add_vital_logs_with_member_rls.sql` — adds append-only blood pressure, heart rate, temperature, weight and blood glucose observations with recorder attribution, member-scoped RLS and audit events.
+12. `20261115110500_revoke_anonymous_vital_log_access.sql` — removes anonymous grants and explicitly limits authenticated clients to reading and appending vital logs.
+13. `20261115111000_enable_realtime_for_vital_logs.sql` — adds vital observations to the Supabase Realtime publication.
 
-All nine application tables have RLS enabled. Membership writes and invitation redemption are performed by authenticated Edge Functions using the service role; ordinary browser clients cannot write membership rows directly.
+All ten application tables have RLS enabled. Vital logs are append-only and anonymous grants are explicitly revoked. Membership writes and invitation redemption are performed by authenticated Edge Functions using the service role; ordinary browser clients cannot write membership rows directly.
 
 ## Edge Functions
 
@@ -44,7 +47,7 @@ Set these local variables in `.env.local`:
 
 ## Verification
 
-Run `tests/security_smoke.sql` against the project SQL editor or a linked test database. It checks schema presence, RLS, least-privilege grants, server-only membership writes, dose column permissions, cron setup, reminder-secret validation and the local-time 14-day scheduler definition. Run `tests/profile_onboarding_live.sql` and `tests/scheduler_live.sql` for rollback-only live integration checks. They temporarily create rows inside a transaction and roll everything back; run them in a test project where possible.
+Run `tests/security_smoke.sql` against the project SQL editor or a linked test database. It checks schema presence, RLS, least-privilege grants, server-only membership writes, dose column permissions, append-only vital-log access and recorder binding, cron setup, reminder-secret validation and the local-time 14-day scheduler definition. Run `tests/profile_onboarding_live.sql` and `tests/scheduler_live.sql` for rollback-only live integration checks. They temporarily create rows inside a transaction and roll everything back; run them in a test project where possible.
 
 The live database passes the expanded smoke test. The profile onboarding RLS test succeeded as the authenticated role and returned one visible inserted row before rollback. The live scheduler integration test returned 14 daily doses, 2 weekly doses and zero incorrectly timed doses across Asia/Kolkata and America/Los_Angeles; all temporary rows were rolled back. The remaining Supabase security-advisor notice is platform-level leaked-password protection: Supabase documents this feature as available on Pro and above, while this project is on the Free plan. No RLS, exposed-table or function-permission findings were reported. The browser signup form enforces 12+ characters with mixed case, a digit and a symbol; breached-password screening remains a Pro-tier Auth control. The performance advisor currently reports unused-index notices because the project has little production data; foreign-key indexes are retained deliberately rather than removed just to silence that informational notice.
 
