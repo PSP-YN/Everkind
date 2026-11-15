@@ -16,7 +16,7 @@ Everkind is an accessibility-first, collaborative care workspace for older adult
 - Realtime subscriptions for shared care updates.
 - Audit trail for medication, dose, appointment and membership changes.
 - Per-profile reminder preferences and a rolling two-week dose generator.
-- Responsive UI with keyboard-friendly native form controls and clear safety language.
+- Responsive, keyboard-operable UI with WCAG 2.1 AA-oriented semantics, visible focus, accessible dialogs, screen-reader status announcements and high-contrast text.
 
 ## How the solution works
 
@@ -25,7 +25,7 @@ Everkind is an accessibility-first, collaborative care workspace for older adult
 3. The profile owner, care recipient or an authorized caregiver can add medication schedules and appointments.
 4. A rolling dose window creates pending dose records. Authorized members record dose outcomes; the database records who and when.
 5. RLS checks membership and role on every client database request. Membership writes and invitation validation stay server-side.
-6. Realtime subscriptions refresh the shared workspace when authorized records change.
+6. Realtime subscriptions refresh the active care profile only when relevant records change; bursts are debounced to reduce redundant queries.
 7. A scheduled Edge Function checks dose and appointment windows and sends email notifications through Resend when provider credentials are configured.
 
 ## Architecture
@@ -52,12 +52,17 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Production build and dependency audit:
+Full quality gate (formatting, lint, unit tests, production build, browser accessibility tests and dependency audit):
 
 ```bash
-npm run build
-npm audit
+npm run check
 ```
+
+Run individual checks with `npm run lint`, `npm test`, `npm run test:a11y`, `npm run build` and `npm audit --audit-level=moderate`. Browser accessibility tests use a mocked Supabase session and do not read or modify live care data.
+
+## Quality, testing and accessibility
+
+The repository includes Node test-runner unit tests, ESLint with React Hooks and JSX accessibility rules, Prettier formatting, axe-core browser audits and a GitHub Actions quality workflow. The browser suite audits sign-in, sign-up, onboarding, the authenticated dashboard, each workspace view, all dialogs and a mobile viewport against WCAG 2.1 A/AA and best-practice rules. See [docs/QUALITY_ASSURANCE.md](docs/QUALITY_ASSURANCE.md) for the test matrix, results and manual assistive-technology release checklist.
 
 ## Docker / Google Cloud Run
 
@@ -71,7 +76,7 @@ set -a
 set +a
 docker build \
   --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-  --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+  --build-arg SUPABASE_BROWSER_CONFIG="$VITE_SUPABASE_ANON_KEY" \
   -t everkind:latest .
 docker run --rm -p 8080:8080 everkind:latest
 ```
@@ -93,6 +98,7 @@ A Google Cloud project, billing configuration and authenticated `gcloud` CLI are
 The connected project is documented in [supabase/README.md](supabase/README.md). SQL migrations are in `supabase/migrations/`; Edge Functions are in `supabase/functions/`; database smoke checks are in `supabase/tests/`.
 
 Frontend environment variables:
+
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY` (use the Supabase publishable key; it is public by design and relies on RLS)
 

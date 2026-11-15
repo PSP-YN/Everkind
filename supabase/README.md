@@ -33,6 +33,7 @@ All nine application tables have RLS enabled. Membership writes and invitation r
 The Vercel app uses Supabase Auth and the Data API with only the publishable key. The service-role key, Resend key and cron secret must never be exposed to browser variables.
 
 Set these local variables in `.env.local`:
+
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY` (the Supabase publishable key; public by design and constrained by RLS)
 
@@ -41,6 +42,12 @@ Set these local variables in `.env.local`:
 Run `tests/security_smoke.sql` against the project SQL editor or a linked test database. It checks schema presence, RLS, least-privilege grants, server-only membership writes, dose column permissions, cron setup and reminder-secret validation.
 
 The live database has passed this smoke test and the Supabase security advisor returned no findings at the last check. Performance-advisor notices were limited to currently unused indexes on the new workload.
+
+## Frontend performance and quality checks
+
+Workspace data requests are issued concurrently, including the medication-dose query filtered through its related medication profile. Realtime dose events are ignored unless their medication belongs to the active profile; relevant event bursts are debounced before reloading. Profile-local dates are used when generating schedules so early-morning UTC date boundaries do not shift the care day.
+
+Run `npm run check` from the repository root for formatting, lint, unit tests, production build, axe-core accessibility checks and dependency audit. The browser suite uses mocked Supabase responses. See [../docs/QUALITY_ASSURANCE.md](../docs/QUALITY_ASSURANCE.md).
 
 ## Safety boundary
 
