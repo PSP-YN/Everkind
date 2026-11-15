@@ -170,6 +170,8 @@ try {
     let createdAppointment = null;
     let createdInvitePayload = null;
     let createdRedeemPayload = null;
+    let doseUpdatePayload = null;
+    let preferenceUpdatePayload = null;
     await page.route(supabaseUrl + '/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data = [];
@@ -262,6 +264,7 @@ try {
         });
         return;
       } else if (path.endsWith('/rest/v1/notification_preferences') && method === 'PATCH') {
+        preferenceUpdatePayload = JSON.parse(route.request().postData() || '{}');
         await route.fulfill({ status: 204, body: '' });
         return;
       } else if (path.endsWith('/rest/v1/care_members')) {
@@ -289,6 +292,7 @@ try {
         data = createdAppointment ? [appointment, createdAppointment] : [appointment];
       else if (path.endsWith('/rest/v1/audit_events')) data = [activity];
       else if (path.endsWith('/rest/v1/medication_doses') && method === 'PATCH') {
+        doseUpdatePayload = JSON.parse(route.request().postData() || '{}');
         doseStatus = 'taken';
         await route.fulfill({ status: 204, body: '' });
         return;
@@ -335,6 +339,12 @@ try {
       },
       get createdRedeemPayload() {
         return createdRedeemPayload;
+      },
+      get doseUpdatePayload() {
+        return doseUpdatePayload;
+      },
+      get preferenceUpdatePayload() {
+        return preferenceUpdatePayload;
       },
     };
   }
@@ -408,6 +418,16 @@ try {
     .first()
     .click();
   await page.getByText('Taken', { exact: true }).waitFor();
+  if (
+    app.doseUpdatePayload?.status !== 'taken' ||
+    app.doseUpdatePayload?.recorded_by !== userId ||
+    !Number.isFinite(Date.parse(app.doseUpdatePayload?.taken_at))
+  ) {
+    throw new Error(
+      'Dose outcome did not persist the status, timestamp and authenticated recorder',
+    );
+  }
+  console.log('PASS dose outcome records status, timestamp and authenticated recorder');
   await audit(page, 'dose recorded state');
 
   for (const [label, name] of [
@@ -511,7 +531,21 @@ try {
 
   await page.getByRole('button', { name: 'Reminder settings', exact: true }).click();
   await audit(page, 'reminder preferences dialog');
-  await page.getByRole('button', { name: 'Close dialog' }).click();
+  await page.getByLabel('Enable email reminders').check();
+  await page.getByLabel('Dose reminder lead time').selectOption('30');
+  await page.getByLabel('Missed dose alert delay').selectOption('120');
+  await page.getByLabel('Appointment reminder').selectOption('48');
+  await page.getByRole('button', { name: 'Save preferences' }).click();
+  await page.locator('[role="dialog"]').waitFor({ state: 'detached' });
+  if (
+    app.preferenceUpdatePayload?.email_enabled !== true ||
+    app.preferenceUpdatePayload?.dose_lead_minutes !== 30 ||
+    app.preferenceUpdatePayload?.missed_dose_delay_minutes !== 120 ||
+    app.preferenceUpdatePayload?.appointment_lead_hours !== 48
+  ) {
+    throw new Error('Reminder preference changes were not persisted with the selected values');
+  }
+  console.log('PASS reminder preferences persist all selected values');
 
   await page.getByRole('button', { name: 'Safety & privacy' }).click();
   await audit(page, 'safety and privacy dialog');

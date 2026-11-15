@@ -17,7 +17,7 @@
 - Corrected dose generation to use each profile's local calendar date.
 - Corrected the rolling scheduler to generate exactly 14 local calendar dates.
 - Added live rollback-only scheduler tests for daily/weekly schedules and multiple timezones.
-- Strengthened browser regression coverage for joining a care circle and the invitation code format.
+- Strengthened browser regression coverage for joining a care circle, invitation code format, dose outcome attribution and reminder preference persistence.
 
 ### Engineering and documentation
 
