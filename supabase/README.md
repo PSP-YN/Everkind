@@ -14,11 +14,11 @@ The migration files are ordered to match the migrations already applied to the l
 6. `20261115090047_prune_unused_indexes.sql` — removes secondary indexes initially identified as unused.
 7. `20261115090112_restore_foreign_key_indexes.sql` — restores foreign-key indexes for referential performance.
 8. `20261115091903_owner_can_read_own_care_profile.sql` — permits a profile owner to read their newly inserted profile during PostgREST INSERT ... RETURNING.
-9. `20261115100000_profile_timezone_dose_window.sql` — computes the scheduler window from each profile's local calendar date instead of the database UTC date.
-10. `20261115100500_exact_fourteen_local_days.sql` — bounds the rolling window to exactly 14 local calendar dates, including today.
-11. `20261115110000_add_vital_logs_with_member_rls.sql` — adds append-only blood pressure, heart rate, temperature, weight and blood glucose observations with recorder attribution, member-scoped RLS and audit events.
-12. `20261115110500_revoke_anonymous_vital_log_access.sql` — removes anonymous grants and explicitly limits authenticated clients to reading and appending vital logs.
-13. `20261115111000_enable_realtime_for_vital_logs.sql` — adds vital observations to the Supabase Realtime publication.
+9. `20261115095445_profile_timezone_dose_window.sql` — computes the scheduler window from each profile's local calendar date instead of the database UTC date.
+10. `20261115095630_exact_fourteen_local_days.sql` — bounds the rolling window to exactly 14 local calendar dates, including today.
+11. `20261115100859_add_vital_logs_with_member_rls.sql` — adds append-only blood pressure, heart rate, temperature, weight and blood glucose observations with recorder attribution, member-scoped RLS and audit events.
+12. `20261115101215_revoke_anonymous_vital_log_access.sql` — removes anonymous grants and explicitly limits authenticated clients to reading and appending vital logs.
+13. `20261115101357_enable_realtime_for_vital_logs.sql` — adds vital observations to the Supabase Realtime publication.
 
 All ten application tables have RLS enabled. Vital logs are append-only and anonymous grants are explicitly revoked. Membership writes and invitation redemption are performed by authenticated Edge Functions using the service role; ordinary browser clients cannot write membership rows directly.
 
