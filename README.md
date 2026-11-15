@@ -2,23 +2,26 @@
 
 An accessibility-first elderly-care coordination prototype for medication routines, appointments and family collaboration.
 
-## Demo capabilities
-- Responsive care dashboard and adherence overview.
+## Working preview
+- Responsive family-care dashboard and adherence overview.
 - Medication creation, schedules and dose logging.
 - Appointment creation and visit overview.
-- Care-circle view and illustrative invitation flow.
-- Browser-local persistence for prototype data.
+- Care-circle view and invitation UI.
+- Browser-local persistence for the live preview.
+- Safety copy distinguishing care organization from medical advice.
 
-## Important limitation
-This build is a demo. Records are stored in the visitor's browser (localStorage), so they do not synchronize between devices or users. The invitation code is illustrative, not an authentication credential. Email reminder controls are UI-only; no emails are sent. Do not enter real patient data.
+## Backend foundation
+The repository also includes a Supabase schema with row-level security, membership roles, hashed one-time invitations, dose records, appointment records, notification preferences, delivery records and audit events. Edge Functions implement invitation creation/redemption and a Resend-backed reminder worker. Setup instructions are in supabase/README.md.
 
-## Production hardening
-Before handling real health information, connect verified authentication, server-side invitation redemption, role-based authorization and row-level security, managed secrets, audit trails, scheduled idempotent reminder jobs, delivery logs/retries, consent and revocation workflows, clinical safety review, accessibility testing with older adults, and applicable privacy/legal review.
+**The backend is not yet connected to the live preview.** The current Vercel deployment stores records in the visitor's browser (localStorage), so users do not share or synchronize records. The invitation code shown in the UI is illustrative and is not an authentication credential. Email reminders are not being sent. Do not enter real patient data.
 
-## Run
+## Production activation
+A dedicated Supabase project, migration deployment, function secrets, Resend sender verification, scheduled invocation and end-to-end authorization/email tests are still required. The frontend also needs Supabase Auth and database integration before the shared-care workflow can be considered live.
+
+## Run locally
 npm install
 npm run dev
 npm run build
 
 ## Stack
-React, Vite, Lucide icons and CSS. Backend integration is not represented as live until configured and security-tested.
+React, Vite, Lucide icons, CSS, Supabase (backend foundation).
