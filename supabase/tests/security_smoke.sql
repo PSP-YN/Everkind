@@ -9,6 +9,7 @@ declare
   count_tables integer;
   dose_update_check text;
   profile_read_policy text;
+  scheduler_definition text;
 begin
   select count(*) into count_tables
   from information_schema.tables
@@ -98,6 +99,14 @@ begin
   end if;
   if not exists(select 1 from cron.job where jobname='everkind-generate-future-doses' and active) then
     raise exception 'Daily dose generation cron job is not active';
+  end if;
+
+  select pg_get_functiondef('private.generate_future_doses()'::regprocedure)
+  into scheduler_definition;
+  if position('now() at time zone' in lower(scheduler_definition))=0
+     or position('local_today+13' in lower(scheduler_definition))=0
+     or position('current_date' in lower(scheduler_definition))>0 then
+    raise exception 'Dose generator must create exactly 14 dates from each profile local day';
   end if;
   if public.validate_reminder_secret('invalid-test-value') then
     raise exception 'Reminder secret validator accepted an invalid secret';

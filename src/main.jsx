@@ -245,7 +245,7 @@ function Onboarding({ user, onCreated, onJoin }) {
             autoComplete="off"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="EVER-XXXXXXXXXXXX"
+            placeholder="EVER-32-CHARACTER-HEX-CODE"
           />
           <button type="submit" className="outline full" disabled={busy} aria-busy={busy}>
             Join care circle

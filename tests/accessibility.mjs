@@ -169,6 +169,7 @@ try {
     let createdDoseRows = [];
     let createdAppointment = null;
     let createdInvitePayload = null;
+    let createdRedeemPayload = null;
     await page.route(supabaseUrl + '/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data = [];
@@ -235,9 +236,29 @@ try {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            code: 'EVER-TEST-ONE',
-            expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+            code: 'EVER-0123456789ABCDEF0123456789ABCDEF',
+            expires_in_hours: 48,
           }),
+        });
+        return;
+      } else if (path.endsWith('/functions/v1/redeem-invite') && method === 'POST') {
+        createdRedeemPayload = JSON.parse(route.request().postData() || '{}');
+        if (
+          createdRedeemPayload.code?.trim().toUpperCase() !==
+          'EVER-0123456789ABCDEF0123456789ABCDEF'
+        ) {
+          await route.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'Invalid invitation code' }),
+          });
+          return;
+        }
+        currentProfiles = [profile];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true, profile_id: profile.id, role: 'family' }),
         });
         return;
       } else if (path.endsWith('/rest/v1/notification_preferences') && method === 'PATCH') {
@@ -312,6 +333,9 @@ try {
       get createdInvitePayload() {
         return createdInvitePayload;
       },
+      get createdRedeemPayload() {
+        return createdRedeemPayload;
+      },
     };
   }
 
@@ -362,6 +386,17 @@ try {
   await onboarding.page.getByText('Test Care Recipient', { exact: true }).waitFor();
   console.log('PASS onboarding creates and reads back an owner-bound care profile');
   await onboarding.context.close();
+
+  const joining = await appPage({ profiles: [] });
+  await joining.page.getByLabel('Invitation code').fill('ever-0123456789abcdef0123456789abcdef');
+  await joining.page.getByRole('button', { name: 'Join care circle' }).click();
+  await joining.page.waitForSelector('.shell');
+  await joining.page.getByText('Accessibility Test Profile', { exact: true }).waitFor();
+  if (joining.createdRedeemPayload?.code !== 'ever-0123456789abcdef0123456789abcdef') {
+    throw new Error('Care-circle join did not submit the invitation code entered by the user');
+  }
+  console.log('PASS care-circle joining submits the code and opens the joined profile');
+  await joining.context.close();
 
   const app = await appPage();
   const page = app.page;
@@ -464,7 +499,7 @@ try {
   await inviteDialog.getByLabel('Email address (optional)').fill('family@example.com');
   await inviteDialog.getByLabel('Access role').selectOption('family');
   await inviteDialog.getByRole('button', { name: /Generate one-time invitation/ }).click();
-  await inviteDialog.getByText('EVER-TEST-ONE', { exact: true }).waitFor();
+  await inviteDialog.getByText('EVER-0123456789ABCDEF0123456789ABCDEF', { exact: true }).waitFor();
   if (
     app.createdInvitePayload?.profile_id !== profile.id ||
     app.createdInvitePayload?.email !== 'family@example.com'
