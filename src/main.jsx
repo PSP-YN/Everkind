@@ -288,6 +288,7 @@ function App() {
     selectedProfile ||
     profiles[0] ||
     null;
+  const timeZone = profile?.timezone || 'Asia/Kolkata';
   const [medForm, setMedForm] = useState({
     name: '',
     dose: '',
@@ -634,6 +635,10 @@ function App() {
     .filter((a) => a.status === 'scheduled' && new Date(a.starts_at) >= new Date())
     .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
   const pct = todayDoses.length ? Math.round((taken / todayDoses.length) * 100) : 0;
+  const nextDose = pending[0] || null;
+  const nextDoseIsPast = nextDose
+    ? new Date(nextDose.due_at).getTime() < new Date().getTime()
+    : false;
   if (!isSupabaseConfigured)
     return (
       <div className="authwrap" role="main">
@@ -764,7 +769,7 @@ function App() {
           <div className="headright">
             <span>
               <CalendarDays size={15} />{' '}
-              {formatDate(today(), {
+              {formatDate(today(timeZone), {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
@@ -801,29 +806,58 @@ function App() {
                   </button>
                 )}
               </div>
-              <section className="hero">
-                <div>
-                  <span className="hero-kicker">✧ &nbsp; YOUR CARE, IN SYNC</span>
-                  <h2>
-                    A little care goes
-                    <br />a long way.
+              <section className="today-focus" aria-labelledby="today-focus-title">
+                <div className="today-focus-copy">
+                  <p className="focus-kicker">
+                    <HeartPulse size={16} aria-hidden="true" /> TODAY'S CARE PLAN
+                  </p>
+                  <h2 id="today-focus-title">
+                    {nextDose
+                      ? 'One step at a time.'
+                      : todayDoses.length
+                        ? 'You are up to date.'
+                        : 'Your care plan starts here.'}
                   </h2>
                   <p>
-                    Every dose, every visit, every check-in —<br />
-                    the people who care are right here.
+                    {nextDose
+                      ? nextDoseIsPast
+                        ? 'This dose is past its scheduled time. Confirm it was taken before recording it. If missed or uncertain, follow the clinician’s instructions.'
+                        : 'The next scheduled dose is shown below. Only record it after it has been taken.'
+                      : todayDoses.length
+                        ? 'All scheduled doses for today have been recorded.'
+                        : 'Add the medicines and appointments shared by your care team.'}
                   </p>
-                  <button onClick={() => setTab('Care circle')}>
-                    Meet your care circle <ArrowRight size={15} />
-                  </button>
                 </div>
-                <div className="hero-art" aria-hidden="true">
-                  <div className="orb" />
-                  <div className="heart-art">
-                    <HeartPulse size={48} />
-                  </div>
-                  <div className="leaf" />
+                <div className="focus-action">
+                  {nextDose ? (
+                    <>
+                      <span className="focus-label">
+                        {nextDoseIsPast ? 'PAST-DUE · CHECK STATUS' : 'NEXT SCHEDULED DOSE'}
+                      </span>
+                      <strong>{nextDose.medications?.name || 'Medication'}</strong>
+                      <span>
+                        {nextDose.medications?.dose || 'As prescribed'} ·{' '}
+                        {formatTime(nextDose.due_at, timeZone)}
+                      </span>
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy}
+                        onClick={() => markDose(nextDose)}
+                        aria-label={'Mark taken: ' + (nextDose.medications?.name || 'medication')}
+                      >
+                        <Check size={17} aria-hidden="true" /> Mark taken
+                      </button>
+                    </>
+                  ) : (
+                    <span className="focus-complete">
+                      <CheckCircle2 size={20} aria-hidden="true" />{' '}
+                      {todayDoses.length
+                        ? "Today's doses are recorded"
+                        : 'No doses scheduled today'}
+                    </span>
+                  )}
                 </div>
-                <small>♥ &nbsp; Care that connects</small>
               </section>
               <div className="sectiontitle">
                 <div>
@@ -831,7 +865,7 @@ function App() {
                   <p>Live records from your care circle.</p>
                 </div>
                 <small>
-                  {formatDate(today(), {
+                  {formatDate(today(timeZone), {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'short',
@@ -868,7 +902,7 @@ function App() {
                   </strong>
                   <footer>
                     {pending.length
-                      ? 'Next: ' + formatTime(pending[0]?.due_at)
+                      ? 'Next: ' + formatTime(pending[0]?.due_at, timeZone)
                       : 'No pending doses'}
                     <span>Today</span>
                   </footer>
@@ -876,11 +910,11 @@ function App() {
                 <div className="stat">
                   <span className="stat-label">Next appointment</span>
                   <strong className="date">
-                    {upcoming[0] ? formatDate(upcoming[0].starts_at) : '—'}
+                    {upcoming[0] ? formatDate(upcoming[0].starts_at, undefined, timeZone) : '—'}
                   </strong>
                   <footer>
                     {upcoming[0]?.clinician_name || 'No appointments'}
-                    <span>{upcoming[0] ? formatTime(upcoming[0].starts_at) : ''}</span>
+                    <span>{upcoming[0] ? formatTime(upcoming[0].starts_at, timeZone) : ''}</span>
                   </footer>
                 </div>
                 <div className="stat">
@@ -899,7 +933,10 @@ function App() {
                   <div className="panelhead">
                     <div>
                       <h2>Medication schedule</h2>
-                      <p>Record today's doses as they are completed.</p>
+                      <p>
+                        Check each dose against the care team's instructions. Record it only after
+                        it has been taken.
+                      </p>
                     </div>
                     <button type="button" className="link" onClick={() => setTab('Medications')}>
                       View all <ArrowRight size={14} />
@@ -908,8 +945,14 @@ function App() {
                   {todayDoses.map((d) => (
                     <div className="medrow" key={d.id}>
                       <div className="time">
-                        <b>{formatTime(d.due_at)}</b>
-                        <small>{d.status}</small>
+                        <b>{formatTime(d.due_at, timeZone)}</b>
+                        <small>
+                          {d.status === 'taken'
+                            ? 'Recorded'
+                            : d.status === 'pending'
+                              ? 'To take'
+                              : d.status}
+                        </small>
                       </div>
                       <div className="pill">
                         <Pill size={18} />
@@ -918,7 +961,7 @@ function App() {
                         <b>{d.medications?.name}</b>
                         <small>{d.medications?.dose}</small>
                       </div>
-                      {d.status === 'pending' && (
+                      {d.status === 'pending' && d.id !== nextDose?.id && (
                         <button
                           type="button"
                           className="dose"
@@ -963,14 +1006,17 @@ function App() {
                   {upcoming.slice(0, 3).map((a) => (
                     <div className="visitrow" key={a.id}>
                       <div className="visitdate">
-                        <b>{formatDate(a.starts_at, { day: '2-digit' })}</b>
-                        <small>{formatDate(a.starts_at, { month: 'short' }).toUpperCase()}</small>
+                        <b>{formatDate(a.starts_at, { day: '2-digit' }, timeZone)}</b>
+                        <small>
+                          {formatDate(a.starts_at, { month: 'short' }, timeZone).toUpperCase()}
+                        </small>
                       </div>
                       <div>
                         <b>{a.clinician_name}</b>
                         <small>{a.specialty}</small>
                         <small>
-                          ◷ {formatTime(a.starts_at)} · {a.location || 'Location not added'}
+                          ◷ {formatTime(a.starts_at, timeZone)} ·{' '}
+                          {a.location || 'Location not added'}
                         </small>
                       </div>
                     </div>
@@ -1013,7 +1059,8 @@ function App() {
                       <small>{x.entity_type}</small>
                     </div>
                     <time>
-                      {formatDate(x.created_at)} · {formatTime(x.created_at)}
+                      {formatDate(x.created_at, undefined, timeZone)} ·{' '}
+                      {formatTime(x.created_at, timeZone)}
                     </time>
                   </div>
                 ))}
@@ -1092,7 +1139,20 @@ function App() {
                       <span className="tag">ACTIVE</span>
                     </div>
                   ))}
-                {!meds.length && <div className="empty">No medications have been added.</div>}
+                {!meds.length && (
+                  <div className="empty">
+                    No medications have been added. Add the current regimen exactly as provided by
+                    the clinician.
+                  </div>
+                )}
+                {meds.length > 0 &&
+                  !meds.some((m) =>
+                    (m.name + m.dose).toLowerCase().includes(search.toLowerCase()),
+                  ) && (
+                    <div className="empty">
+                      No medicines match “{search}”. Try a different name.
+                    </div>
+                  )}
               </section>
               <div className="notice">
                 <ShieldCheck />
@@ -1125,12 +1185,16 @@ function App() {
                   <section className="panel visitcard" key={a.id}>
                     <span className="tag">{a.status.toUpperCase()}</span>
                     <div className="datebig">
-                      {formatDate(a.starts_at, { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {formatDate(
+                        a.starts_at,
+                        { day: 'numeric', month: 'long', year: 'numeric' },
+                        timeZone,
+                      )}
                     </div>
                     <h2>{a.clinician_name}</h2>
                     <p>{a.specialty}</p>
                     <div>
-                      <Clock /> {formatTime(a.starts_at)}
+                      <Clock /> {formatTime(a.starts_at, timeZone)}
                     </div>
                     <div>
                       <Stethoscope /> {a.location || 'Location not added'}

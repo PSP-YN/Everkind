@@ -40,6 +40,14 @@ test('weekly schedule creates two doses in a fourteen-day window', () => {
   assert.equal(rows[1].due_at, '2026-11-22T15:45:00.000Z');
 });
 
+test('formatters respect the care profile timezone and preserve calendar dates', () => {
+  assert.match(formatTime('2026-11-15T02:30:00.000Z', 'Asia/Kolkata'), /08:00/);
+  assert.equal(
+    formatDate('2026-11-15', { day: 'numeric', month: 'short' }, 'America/Los_Angeles'),
+    '15 Nov',
+  );
+});
+
 test('formatters handle empty values safely', () => {
   assert.equal(formatDate(null), '—');
   assert.equal(formatTime(undefined), '—');

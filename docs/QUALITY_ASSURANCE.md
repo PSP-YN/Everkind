@@ -20,11 +20,11 @@ The gates include:
 | Browser accessibility | `npm run test:a11y`                | axe-core WCAG 2.1 A/AA, WCAG 2.1 AA and best-practice scans             |
 | Dependency audit      | `npm audit --audit-level=moderate` | Known dependency vulnerabilities                                        |
 
-GitHub Actions runs the same gates on pushes and pull requests to `main`. The accessibility browser tests use a mocked Supabase session and mocked REST responses; they do not access or modify live care data. The onboarding integration test submits a new care profile, verifies that the authenticated user's ID is bound as `owner_id`, and verifies that the inserted profile can be read back.
+GitHub Actions runs the same gates on pushes and pull requests to `main`. The Playwright browser tests use a mocked Supabase session, REST responses and Edge Function responses; they do not access or modify live care data. Interaction checks exercise owner-bound profile creation, marking a dose taken, medication creation with a 14-day schedule, appointment creation with the authenticated creator, invitation creation with email binding, keyboard dialog focus and mobile navigation. The suite also fails on uncaught browser errors or unexpected third-party requests. The onboarding integration test submits a new care profile, verifies that the authenticated user's ID is bound as `owner_id`, and verifies that the inserted profile can be read back.
 
 ## Accessibility implementation
 
-Everkind targets WCAG 2.1 AA. Automated checks cover the sign-in and sign-up screens, first-run onboarding, authenticated dashboard, all four workspace views, medication and appointment forms, invitation dialog, reminder preferences, safety dialog and a 390px mobile viewport.
+Everkind targets WCAG 2.1 AA. Automated checks cover the sign-in and sign-up screens, first-run onboarding, authenticated dashboard, all four workspace views, medication and appointment forms, invitation dialog, reminder preferences, safety dialog and responsive layouts at 320px, 390px and 768px (narrow mobile, mobile and tablet).
 
 Implemented measures include:
 
@@ -38,14 +38,14 @@ Implemented measures include:
 - Programmatic medication-adherence meter values.
 - Higher-contrast secondary text, readable placeholders and larger touch targets.
 - Reduced-motion and forced-colors support.
-- No horizontal overflow at the tested 390px mobile viewport.
+- No horizontal overflow at 320px, 390px or 768px; fixed mobile navigation, 44px touch targets and mobile sign-out are also verified.
 
 ## Test results recorded during development
 
 The latest local automated run recorded:
 
-- Unit tests: 7 passed, 0 failed.
-- axe-core: 0 violations in each audited state.
+- Unit tests: 8 passed, 0 failed.
+- axe-core: 0 violations in all 17 audited states, including 320px, 390px and 768px layouts.
 - Mobile viewport: 0px horizontal overflow.
 - ESLint: passed with no warnings or errors.
 - Production build: passed.

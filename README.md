@@ -39,7 +39,7 @@ Everkind is an accessibility-first, collaborative care workspace for older adult
 
 ## Live demo
 
-https://catalyst-one-xi.vercel.app
+https://ever-kind-care.vercel.app
 
 ## Run locally
 
@@ -62,7 +62,7 @@ Run individual checks with `npm run lint`, `npm test`, `npm run test:a11y`, `npm
 
 ## Quality, testing and accessibility
 
-The repository includes Node test-runner unit tests, ESLint with React Hooks and JSX accessibility rules, Prettier formatting, axe-core browser audits and a GitHub Actions quality workflow. The browser suite audits sign-in, sign-up, onboarding, the authenticated dashboard, each workspace view, all dialogs and a mobile viewport against WCAG 2.1 A/AA and best-practice rules. See [docs/QUALITY_ASSURANCE.md](docs/QUALITY_ASSURANCE.md) for the test matrix, results and manual assistive-technology release checklist.
+The repository includes Node test-runner unit tests, ESLint with React Hooks and JSX accessibility rules, Prettier formatting, axe-core browser audits and a GitHub Actions quality workflow. The browser suite audits sign-in, sign-up, onboarding, the authenticated dashboard, each workspace view, all dialogs and 320px, 390px and 768px layouts against WCAG 2.1 A/AA and best-practice rules. It also exercises profile, medication, appointment and invitation workflows with mocked backend responses. See [docs/QUALITY_ASSURANCE.md](docs/QUALITY_ASSURANCE.md) for the test matrix, results and manual assistive-technology release checklist.
 
 ## Docker / Google Cloud Run
 

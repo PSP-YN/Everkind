@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
-import { localDateTime, today } from '../src/utils.js';
+import { addCalendarDays, localDateTime, today } from '../src/utils.js';
 
 const envFile = fs.existsSync('.env.local') ? fs.readFileSync('.env.local', 'utf8') : '';
 const fileEnv = Object.fromEntries(
@@ -111,6 +111,8 @@ const preview = spawn(
   { stdio: 'ignore' },
 );
 let browser;
+const runtimeErrors = [];
+const unexpectedRequests = [];
 try {
   let ready = false;
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -144,6 +146,13 @@ try {
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
+    page.on('pageerror', (error) => runtimeErrors.push(error.message));
+    page.on('request', (request) => {
+      const hostname = new URL(request.url()).hostname;
+      if (!['127.0.0.1', 'localhost', new URL(supabaseUrl).hostname].includes(hostname)) {
+        unexpectedRequests.push(request.url());
+      }
+    });
     if (authenticated) {
       await page.addInitScript(
         ({ key, value }) => localStorage.setItem(key, JSON.stringify(value)),
@@ -155,6 +164,11 @@ try {
     }
     let doseStatus = 'pending';
     let currentProfiles = profiles;
+    let currentMedications = [medication];
+    let createdMedicationPayload = null;
+    let createdDoseRows = [];
+    let createdAppointment = null;
+    let createdInvitePayload = null;
     await page.route(supabaseUrl + '/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data = [];
@@ -183,7 +197,53 @@ try {
         });
         return;
       } else if (path.endsWith('/rest/v1/care_profiles')) data = currentProfiles;
-      else if (path.endsWith('/rest/v1/care_members')) {
+      else if (path.endsWith('/rest/v1/medications') && method === 'POST') {
+        createdMedicationPayload = JSON.parse(route.request().postData() || '{}');
+        const created = {
+          ...medication,
+          ...createdMedicationPayload,
+          id: '12121212-1212-4121-8121-121212121212',
+        };
+        currentMedications = [...currentMedications, created];
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/vnd.pgrst.object+json',
+          body: JSON.stringify(created),
+        });
+        return;
+      } else if (path.endsWith('/rest/v1/medication_doses') && method === 'POST') {
+        const rows = JSON.parse(route.request().postData() || '[]');
+        createdDoseRows = rows.map((row, index) => ({
+          ...row,
+          id: '13131313-1313-4131-8131-' + String(index + 1).padStart(12, '0'),
+          medications: currentMedications[currentMedications.length - 1],
+        }));
+        await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+        return;
+      } else if (path.endsWith('/rest/v1/appointments') && method === 'POST') {
+        const payload = JSON.parse(route.request().postData() || '{}');
+        createdAppointment = {
+          ...payload,
+          id: '14141414-1414-4141-8141-141414141414',
+          status: 'scheduled',
+        };
+        await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
+        return;
+      } else if (path.endsWith('/functions/v1/create-invite') && method === 'POST') {
+        createdInvitePayload = JSON.parse(route.request().postData() || '{}');
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 'EVER-TEST-ONE',
+            expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+          }),
+        });
+        return;
+      } else if (path.endsWith('/rest/v1/notification_preferences') && method === 'PATCH') {
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      } else if (path.endsWith('/rest/v1/care_members')) {
         const params = new URL(route.request().url()).searchParams;
         const owner = {
           id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
@@ -203,8 +263,9 @@ try {
             missed_dose_delay_minutes: 60,
           },
         ];
-      } else if (path.endsWith('/rest/v1/medications')) data = [medication];
-      else if (path.endsWith('/rest/v1/appointments')) data = [appointment];
+      } else if (path.endsWith('/rest/v1/medications')) data = currentMedications;
+      else if (path.endsWith('/rest/v1/appointments'))
+        data = createdAppointment ? [appointment, createdAppointment] : [appointment];
       else if (path.endsWith('/rest/v1/audit_events')) data = [activity];
       else if (path.endsWith('/rest/v1/medication_doses') && method === 'PATCH') {
         doseStatus = 'taken';
@@ -220,6 +281,11 @@ try {
             recorded_by: doseStatus === 'taken' ? userId : null,
             medications: medication,
           },
+          ...createdDoseRows.map((row) => ({
+            ...row,
+            status: row.status || 'pending',
+            recorded_by: null,
+          })),
         ];
       }
       await route.fulfill({
@@ -231,7 +297,22 @@ try {
     });
     await page.route('**/realtime/**', (route) => route.abort());
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
-    return { context, page };
+    return {
+      context,
+      page,
+      get createdMedicationPayload() {
+        return createdMedicationPayload;
+      },
+      get createdDoseRows() {
+        return createdDoseRows;
+      },
+      get createdAppointment() {
+        return createdAppointment;
+      },
+      get createdInvitePayload() {
+        return createdInvitePayload;
+      },
+    };
   }
 
   async function audit(page, label) {
@@ -286,7 +367,11 @@ try {
   const page = app.page;
   await page.waitForSelector('.shell');
   await audit(page, 'authenticated dashboard with live records');
-  await page.getByRole('button', { name: /Mark taken: Sample Medication/ }).click();
+  await page.screenshot({ path: '/tmp/everkind-desktop-review.png', fullPage: true });
+  await page
+    .getByRole('button', { name: /Mark taken: Sample Medication/ })
+    .first()
+    .click();
   await page.getByText('Taken', { exact: true }).waitFor();
   await audit(page, 'dose recorded state');
 
@@ -326,18 +411,67 @@ try {
     throw new Error('Dialog did not restore focus to its opening control');
   }
 
+  await medicationTrigger.click();
+  const medicationDialog = page.getByRole('dialog');
+  await medicationDialog.getByLabel('Medication name').fill('Vitamin D');
+  await medicationDialog.getByLabel('Dosage').fill('1 tablet');
+  await medicationDialog.getByLabel('First dose time').fill('09:00');
+  await medicationDialog.getByLabel('Frequency').selectOption('Daily');
+  await medicationDialog.getByRole('button', { name: /Save medication/ }).click();
+  await page.locator('[role="dialog"]').waitFor({ state: 'detached' });
+  await page.locator('.medinfo b').filter({ hasText: 'Vitamin D' }).first().waitFor();
+  if (
+    app.createdMedicationPayload?.name !== 'Vitamin D' ||
+    app.createdMedicationPayload?.created_by !== userId ||
+    app.createdDoseRows.length !== 14 ||
+    app.createdDoseRows.some((row) => row.medication_id !== '12121212-1212-4121-8121-121212121212')
+  ) {
+    throw new Error(
+      'Medication creation did not persist the expected owner-bound 14-day dose schedule',
+    );
+  }
+  console.log('PASS medication creation persists an owner-bound medicine and 14-day dose schedule');
+
   await page
     .getByRole('button', { name: /Add appointment/ })
     .first()
     .click();
   await audit(page, 'add appointment dialog');
-  await page.getByRole('button', { name: 'Close dialog' }).click();
+  const appointmentDialog = page.getByRole('dialog');
+  await appointmentDialog.getByLabel("Doctor's name").fill('Dr. Demo');
+  await appointmentDialog.getByLabel('Specialty').fill('Geriatrics');
+  await appointmentDialog.getByLabel('Date').fill(addCalendarDays(today('Asia/Kolkata'), 1));
+  await appointmentDialog.getByLabel('Time').fill('11:30');
+  await appointmentDialog.getByLabel('Location').fill('Demo clinic');
+  await appointmentDialog.getByLabel('Notes').fill('Bring current medication list');
+  await appointmentDialog.getByRole('button', { name: /Save appointment/ }).click();
+  await page.locator('[role="dialog"]').waitFor({ state: 'detached' });
+  await page.getByText('Dr. Demo', { exact: true }).waitFor();
+  if (
+    app.createdAppointment?.created_by !== userId ||
+    app.createdAppointment?.clinician_name !== 'Dr. Demo'
+  ) {
+    throw new Error('Appointment creation did not persist the authenticated creator');
+  }
+  console.log('PASS appointment creation persists the authenticated creator and visit details');
 
   await page
     .getByRole('button', { name: /Invite (a )?member/ })
     .first()
     .click();
   await audit(page, 'invite dialog');
+  const inviteDialog = page.getByRole('dialog');
+  await inviteDialog.getByLabel('Email address (optional)').fill('family@example.com');
+  await inviteDialog.getByLabel('Access role').selectOption('family');
+  await inviteDialog.getByRole('button', { name: /Generate one-time invitation/ }).click();
+  await inviteDialog.getByText('EVER-TEST-ONE', { exact: true }).waitFor();
+  if (
+    app.createdInvitePayload?.profile_id !== profile.id ||
+    app.createdInvitePayload?.email !== 'family@example.com'
+  ) {
+    throw new Error('Invitation creation did not send the selected care profile and email binding');
+  }
+  console.log('PASS invitation creation sends the selected profile and email binding');
   await page.getByRole('button', { name: 'Close dialog' }).click();
 
   await page.getByRole('button', { name: 'Reminder settings', exact: true }).click();
@@ -349,14 +483,62 @@ try {
   await app.context.close();
 
   const mobile = await appPage({ viewport: { width: 390, height: 844 } });
-  const overflow = await mobile.page.evaluate(
+  await audit(mobile.page, 'mobile dashboard at 390px');
+  await mobile.page.screenshot({ path: '/tmp/everkind-mobile-review.png', fullPage: true });
+  if (!(await mobile.page.getByRole('button', { name: 'Sign out' }).isVisible())) {
+    throw new Error('Mobile sign-out action is not reachable');
+  }
+  const mobileNavigation = mobile.page.getByRole('navigation', { name: 'Primary navigation' });
+  for (const label of ['Overview', 'Medications', 'Appointments', 'Care circle']) {
+    if (!(await mobileNavigation.getByRole('button', { name: new RegExp(label) }).isVisible())) {
+      throw new Error('Mobile primary navigation is missing ' + label);
+    }
+  }
+  const bottomNav = await mobile.page.locator('.side').evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return (
+      Math.abs(window.innerHeight - rect.bottom) < 2 &&
+      getComputedStyle(element).position === 'fixed'
+    );
+  });
+  if (!bottomNav) throw new Error('Mobile primary navigation is not fixed to the bottom edge');
+  const undersizedTargets = await mobile.page.locator('button:visible').evaluateAll((elements) =>
+    elements
+      .filter((element) => element.getBoundingClientRect().height < 44)
+      .map((element) => ({
+        text: element.innerText,
+        ariaLabel: element.getAttribute('aria-label'),
+        height: element.getBoundingClientRect().height,
+      })),
+  );
+  if (undersizedTargets.length)
+    throw new Error('Mobile touch targets below 44px: ' + JSON.stringify(undersizedTargets));
+  await mobile.page.setViewportSize({ width: 320, height: 740 });
+  const narrowOverflow = await mobile.page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
-  if (overflow > 0) throw new Error('Mobile horizontal overflow: ' + overflow + 'px');
-  await audit(mobile.page, 'mobile dashboard');
+  if (narrowOverflow > 0)
+    throw new Error('320px mobile horizontal overflow: ' + narrowOverflow + 'px');
+  await audit(mobile.page, 'narrow mobile dashboard at 320px');
+  await mobile.page.setViewportSize({ width: 768, height: 900 });
+  const tabletOverflow = await mobile.page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  if (tabletOverflow > 0) throw new Error('Tablet horizontal overflow: ' + tabletOverflow + 'px');
+  await audit(mobile.page, 'tablet dashboard at 768px');
   await mobile.context.close();
 
-  console.log('Accessibility suite passed: all audited states have zero axe violations.');
+  if (runtimeErrors.length) {
+    throw new Error('Uncaught browser runtime errors: ' + runtimeErrors.join(' | '));
+  }
+  if (unexpectedRequests.length) {
+    throw new Error('Unexpected third-party network requests: ' + unexpectedRequests.join(' | '));
+  }
+  console.log('PASS no uncaught browser runtime errors');
+  console.log('PASS no third-party network requests');
+  console.log(
+    'Accessibility and interaction suite passed: all audited states have zero axe violations across desktop, tablet and mobile.',
+  );
 } finally {
   if (browser) await browser.close();
   preview.kill('SIGTERM');

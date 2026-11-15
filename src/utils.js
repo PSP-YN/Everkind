@@ -64,13 +64,27 @@ export function buildDoseSchedule(
   }).filter(Boolean);
 }
 
-export function formatDate(value, options = { day: 'numeric', month: 'short' }) {
-  return value ? new Date(value).toLocaleDateString('en-IN', options) : '—';
+export function formatDate(
+  value,
+  options = { day: 'numeric', month: 'short' },
+  timeZone = CARE_TIME_ZONE,
+) {
+  if (!value) return '—';
+  const isCalendarDate = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const date = new Date(isCalendarDate ? value + 'T00:00:00.000Z' : value);
+  return new Intl.DateTimeFormat('en-IN', {
+    ...options,
+    timeZone: isCalendarDate ? 'UTC' : timeZone,
+  }).format(date);
 }
 
-export function formatTime(value) {
+export function formatTime(value, timeZone = CARE_TIME_ZONE) {
   return value
-    ? new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    ? new Intl.DateTimeFormat('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone,
+      }).format(new Date(value))
     : '—';
 }
 
