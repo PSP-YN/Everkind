@@ -10,6 +10,13 @@
 - Improved keyboard focus handling, screen-reader labels and status announcements.
 - Removed the remote font dependency and rely on system font stacks.
 
+### Care observations
+
+- Added shared vital observations for blood pressure, heart rate, temperature, weight and blood glucose.
+- Bound each vital entry to its authenticated recorder; active care-circle members can read, while client updates/deletes and anonymous access are blocked.
+- Added server-side audit events and Realtime refresh for new vital readings.
+- Added input, interaction and accessibility regression coverage for the vital-recording workflow.
+
 ### Reliability and scheduling
 
 - Fixed owner visibility for the newly inserted care profile under RLS.
